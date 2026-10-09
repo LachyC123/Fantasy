@@ -9,7 +9,7 @@ import { Ecology } from '../world/ecology';
 import { GenCore } from '../world/genCore';
 import { GenPool } from '../world/genPool';
 import { TerrainStreamer } from '../world/terrainStreamer';
-import { VegetationStreamer } from '../world/vegetationStreamer';
+import { VegetationStreamer, type VegetationOptions } from '../world/vegetationStreamer';
 import { buildStructures, type StructureResult } from '../world/structures';
 import { CollisionWorld } from '../player/collision';
 import { MaterialLibrary } from '../rendering/materials';
@@ -58,7 +58,7 @@ export class WorldRuntime {
     this.group.name = `world ${seed}`;
   }
 
-  async build(progress: Progress, quality: { treeFar: number }): Promise<void> {
+  async build(progress: Progress, quality: Partial<VegetationOptions> = {}): Promise<void> {
     const yieldFrame = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
     let t = performance.now();
     const mark = (name: string): void => {
@@ -99,7 +99,7 @@ export class WorldRuntime {
 
     progress('Growing the old woods', 0.5);
     await yieldFrame();
-    this.vegetation = new VegetationStreamer(this.pool, this.materials, { treeFar: quality.treeFar });
+    this.vegetation = new VegetationStreamer(this.pool, this.materials, quality);
     this.group.add(this.vegetation.group);
     const vegDone = this.vegetation.prepareAsync(spawn, (d, n) => progress('Growing the old woods', 0.5 + 0.45 * (d / Math.max(1, n))));
     await Promise.all([vegDone, this.pool.drain()]);

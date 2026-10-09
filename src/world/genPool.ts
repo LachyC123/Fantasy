@@ -20,7 +20,7 @@ export class GenPool {
   private queue: Pending[] = [];
   private nextId = 1;
   private readyCount = 0;
-  private readonly inline: boolean;
+  private inline: boolean;
   stats = { jobs: 0, workers: 0, inflight: 0, queued: 0 };
 
   constructor(
@@ -34,7 +34,11 @@ export class GenPool {
         for (let i = 0; i < count; i++) {
           const w = new Worker(new URL('./genWorker.ts', import.meta.url), { type: 'module' });
           w.onmessage = (e) => this.onMessage(w, e.data);
-          w.onerror = (e) => console.error('[gen worker]', e.message);
+          w.onerror = (e) => {
+            // A worker that cannot start (blocked script, no module workers) must not stall loading.
+            if (this.readyCount < this.workers.length) this.fallBackInline(e.message || 'worker failed to start');
+            else console.error('[gen worker]', e.message);
+          };
           w.postMessage({ type: 'init', seed });
           this.workers.push(w);
         }
@@ -47,6 +51,24 @@ export class GenPool {
     }
     this.inline = !ok;
     this.stats.workers = this.workers.length;
+    if (ok) {
+      setTimeout(() => {
+        if (!this.inline && this.readyCount < this.workers.length) this.fallBackInline('workers did not start within 15 s');
+      }, 15_000);
+    }
+  }
+
+  /** Switch to main-thread generation; jobs already handed to a worker go back in the queue. */
+  private fallBackInline(reason: string): void {
+    if (this.inline) return;
+    console.warn('[gen pool] generating on the main thread:', reason);
+    this.workers.forEach((w) => w.terminate());
+    this.workers.length = 0;
+    for (const p of this.busy.values()) this.queue.push(p);
+    this.busy.clear();
+    this.queue.sort((a, b) => a.priority - b.priority);
+    this.inline = true;
+    this.stats.workers = 0;
   }
 
   get usingWorkers(): boolean {
@@ -128,12 +150,14 @@ export class GenPool {
     this.pump();
   }
 
-  /** Inline mode only: keep running queued jobs (yielding to the browser) until none remain. */
+  /**
+   * Wait until every live job has finished (loading). Inline mode runs them here, yielding to
+   * the browser; worker mode only waits, and also covers a switch to inline mid-load.
+   */
   async drain(): Promise<void> {
-    if (!this.inline) return;
-    while (this.queue.length) {
-      this.tickInline(30);
-      await new Promise((r) => setTimeout(r, 0));
+    while (this.busy.size > 0 || this.queue.some((p) => !p.cancelled)) {
+      if (this.inline) this.tickInline(30);
+      await new Promise((r) => setTimeout(r, this.inline ? 0 : 20));
     }
   }
 

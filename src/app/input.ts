@@ -8,6 +8,8 @@ export class Input {
   private mouseDX = 0;
   private mouseDY = 0;
   private clicks = 0;
+  /** Analog movement from the touch stick (x = right, y = forward), -1..1. */
+  readonly axis = { x: 0, y: 0, sprint: false };
   enabled = false;
   /** Test hook: allow look/move without pointer lock (automated browser tests). */
   allowUnlocked = false;
@@ -75,7 +77,24 @@ export class Input {
     return c;
   }
 
-  /** Inject synthetic look input (used by automated tests). */
+  /** Virtual buttons (touch controls) press and release keys like a keyboard would. */
+  virtualKey(code: string, down: boolean): void {
+    if (down) {
+      if (!this.keys.has(code)) this.pressed.add(code);
+      this.keys.add(code);
+    } else this.keys.delete(code);
+  }
+
+  /** Tap a virtual key: counts as one press, even within a single frame. */
+  tapKey(code: string): void {
+    if (this.enabled) this.pressed.add(code);
+  }
+
+  addClick(): void {
+    if (this.enabled) this.clicks++;
+  }
+
+  /** Inject synthetic look input (touch drags and automated tests). */
   injectLook(dx: number, dy: number): void {
     this.mouseDX += dx;
     this.mouseDY += dy;
@@ -90,5 +109,7 @@ export class Input {
     this.pressed.clear();
     this.mouseDX = this.mouseDY = 0;
     this.clicks = 0;
+    this.axis.x = this.axis.y = 0;
+    this.axis.sprint = false;
   }
 }

@@ -207,6 +207,13 @@ export class VegetationStreamer {
     }
   }
 
+  /** Change vegetation ranges at runtime (the view distance setting); the next frame rebuilds. */
+  setRange(r: Partial<Pick<VegetationOptions, 'treeFar' | 'treeMid' | 'treeNear' | 'groundRadius' | 'grassRadius'>>): void {
+    Object.assign(this.opts, r);
+    this.dirty = true;
+    this.lodCell = '';
+  }
+
   treeAsset(species: TreeSpecies, variant: number): TreeAsset {
     return this.treeAssets.get(`${species}:${variant % TREE_VARIANTS}`)!;
   }

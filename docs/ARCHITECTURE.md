@@ -11,7 +11,9 @@ main.ts                     bootstrap, WebGL2 check, test-hook export
 app/
   game.ts                   Game: renderer, lighting, state machine, frame loop, test API
   worldRuntime.ts           WorldRuntime: owns one generated world and its scene graph
-  input.ts                  keyboard/mouse, deliberate pointer lock, consumable presses
+  input.ts                  keyboard/mouse, deliberate pointer lock, consumable presses, analog stick axis
+  touch.ts                  touch controls (floating stick, drag look, buttons) feeding Input
+  device.ts                 touch-device detection (?touch forces it)
   settings.ts               Settings type, defaults, localStorage load/save
   guidance.ts               control hints that advance on performance; place banners
 core/
@@ -57,7 +59,7 @@ gameplay/
 world/ (generation in workers)
   genCore.ts                everything needed to generate data for a seed (no scene objects)
   genWorker.ts              Web Worker answering terrain/vegetation jobs with typed arrays
-  genPool.ts                worker pool with priority queue, cancellation, inline fallback
+  genPool.ts                worker pool with priority queue, cancellation, inline fallback (also if workers fail to start)
   vegPack.ts                per-chunk vegetation jobs and instance packing
 assets/ (procedural meshes)
   weaponMesh.ts             parametric weapon meshes

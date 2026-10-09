@@ -16,7 +16,7 @@ metres (press F3 to see your position).
 | L7 | All audio is synthesised placeholder sound. | Later audio pass |
 | L8 | ~~Chunk generation on the main thread.~~ Moved to a Web Worker pool. Without worker support it falls back to inline generation under a 5 ms budget. | done |
 | L9 | Time of day is a static preset chosen in Settings; there is no day/night cycle yet. | Later |
-| L10 | No gamepad, touch or key remapping. | Later |
+| L10 | No gamepad or key remapping. Touch controls exist but cannot be rearranged or resized. | Later |
 
 ## Open issues
 
@@ -30,4 +30,7 @@ metres (press F3 to see your position).
 | I6 | Pointer lock cannot be re-acquired straight after Esc in some browsers (a browser security rule). | Esc, then click Resume immediately | Resume goes through the *Click to explore* prompt, which always works. |
 | I7 | Headless software rendering runs at about 1–3 FPS, so browser tests take several minutes. | `npm run test:e2e` | Environment limitation, not a game bug. |
 | I9 | Generated creatures sometimes have awkward proportions (thin limbs, horns clipping) and no animation. | `?gallery`, browse | Acceptable for a generator preview; rigging and animation come with M5. |
+| I10 | Frame rate on real phones has not been measured. Phones start with shadows off and a short view distance; older phones may still be slow. | Open on a phone, F3 is unavailable without a keyboard | Lower *Pixel resolution* to 180p if it stutters. A touch-friendly FPS readout is planned. |
+| I11 | iPhone Safari has no full-screen API for pages, so the browser bars stay visible. | Open on iPhone | *Add to Home Screen* from a static host launches it full screen. |
+| I12 | Inside a claude.ai Artifact the URL query string is not passed through, so `?seed=` and `?gallery` do nothing there. | – | Enter the seed in New Journey instead. |
 | I8 | Validation issues for unusual seeds are logged and shown in F3 but not shown to players. | – | Validation passes for 40/40 sampled seeds. A failing seed should be added to the test list. |

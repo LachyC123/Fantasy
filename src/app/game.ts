@@ -23,6 +23,9 @@ import { starterWeapon } from '../gameplay/loot';
 import { RARITY_COLOURS } from '../gameplay/luck';
 import type { WeaponGenome } from '../gameplay/weapons';
 import { Gallery } from './gallery';
+import { isTouchDevice } from './device';
+import { TouchControls } from './touch';
+import { VIEW_DISTANCES } from './settings';
 
 type State = 'boot' | 'title' | 'loading' | 'intro' | 'capture' | 'playing' | 'paused' | 'gallery';
 
@@ -44,6 +47,8 @@ export class Game {
   readonly ui = new UI();
   readonly audio = new AudioManager();
   readonly viewModel: ViewModel;
+  /** On-screen controls on phones and tablets (null with a mouse and keyboard). */
+  readonly touch: TouchControls | null;
   settings: Settings;
   state: State = 'boot';
   world: WorldRuntime | null = null;
@@ -114,6 +119,10 @@ export class Game {
     this.input.allowUnlocked = opts.autotest;
     this.viewModel = new ViewModel(ViewModel.createMaterials());
     this.viewModel.onSwing = () => this.audio.whoosh();
+    const touch = isTouchDevice();
+    document.body.classList.toggle('touch', touch);
+    this.ui.touch = touch;
+    this.touch = touch ? new TouchControls(this.input, { pause: () => this.pause() }) : null;
 
     this.scene.add(this.sky, this.sun, this.sun.target, this.hemi);
     this.sun.castShadow = true;
@@ -163,8 +172,8 @@ export class Game {
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
-  private quality(): { treeFar: number } {
-    return { treeFar: this.settings.internalHeight === 180 ? 1000 : this.settings.internalHeight === 270 ? 1300 : 1500 };
+  private quality(): (typeof VIEW_DISTANCES)[keyof typeof VIEW_DISTANCES] {
+    return VIEW_DISTANCES[this.settings.viewDistance];
   }
 
   private async loadWorld(seed: string, progress: (stage: string, f: number) => void): Promise<void> {
@@ -211,7 +220,7 @@ export class Game {
     this.player!.teleport(w.plan.spawn.x, w.plan.spawn.z);
     this.yaw = w.plan.spawn.yaw;
     this.pitch = -0.28;
-    this.guidance = new Guidance(this.ui, w.plan);
+    this.guidance = new Guidance(this.ui, w.plan, this.touch !== null);
     this.ui.setProgress(1, 'Ready');
     this.history.replaceState(seed);
     this.startIntro();
@@ -252,6 +261,7 @@ export class Game {
     this.ui.show(null);
     this.ui.setHud(true);
     this.ui.setCapture(true);
+    if (this.touch) this.touch.visible = false;
   }
 
   private enterPlay(): void {
@@ -261,6 +271,7 @@ export class Game {
     this.ui.show(null);
     this.ui.setCapture(false);
     this.ui.setHud(true);
+    if (this.touch) this.touch.visible = true;
     this.audio.resume();
   }
 
@@ -269,18 +280,21 @@ export class Game {
     this.state = 'paused';
     this.input.enabled = false;
     this.input.releaseLock();
+    if (this.touch) this.touch.visible = false;
     this.ui.prompt(null);
     this.ui.show('pause');
   }
 
   private resume(): void {
-    if (this.opts.autotest) return this.enterPlay();
+    // Touch has no pointer to capture: Resume goes straight back to the vale.
+    if (this.opts.autotest || this.touch) return this.enterPlay();
     this.enterCapture();
   }
 
   private toTitle(): void {
     this.input.releaseLock();
     this.input.enabled = false;
+    if (this.touch) this.touch.visible = false;
     this.state = 'title';
     this.ui.setHud(false);
     this.ui.setCapture(false);
@@ -325,7 +339,10 @@ export class Game {
         this.ui.pop();
         break;
       case 'capture':
-        this.input.requestLock();
+        if (this.touch) {
+          this.goFullscreen();
+          this.enterPlay();
+        } else this.input.requestLock();
         break;
       case 'resume':
         this.resume();
@@ -363,6 +380,20 @@ export class Game {
     if (code === 'Enter' && this.ui.top === 'new-journey') void this.beginJourney();
   }
 
+  /** Phones: fill the screen and hold landscape where the browser allows it (not iPhone Safari). */
+  private goFullscreen(): void {
+    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+    try {
+      if (!document.fullscreenElement && el.requestFullscreen) {
+        el.requestFullscreen({ navigationUI: 'hide' })
+          .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape'))
+          .catch(() => undefined);
+      }
+    } catch {
+      /* not allowed here (for example inside an embedded frame) */
+    }
+  }
+
   private equip(w: WeaponGenome): void {
     this.weapon = w;
     this.viewModel.setWeapon(w);
@@ -388,6 +419,7 @@ export class Game {
         for (const mm of Array.isArray(m) ? m : [m]) mm.needsUpdate = true;
       });
     }
+    if (s.viewDistance !== prev.viewDistance) this.world?.vegetation.setRange(VIEW_DISTANCES[s.viewDistance]);
     this.pipeline.setOutlines(s.outlines);
     this.camera.fov = s.fov;
     this.camera.updateProjectionMatrix();
@@ -504,7 +536,7 @@ export class Game {
     this.viewModel.update(dt, {
       speed: p?.speed ?? 0,
       stride: p?.stride ?? 0,
-      sprinting: this.input.down('ShiftLeft') || this.input.down('ShiftRight'),
+      sprinting: this.input.down('ShiftLeft') || this.input.down('ShiftRight') || this.input.axis.sprint,
       onGround: p?.onGround ?? true,
       landing: p ? p.landingImpulse : 0,
       lookDX: this.lookDX,
@@ -546,9 +578,10 @@ export class Game {
     this.pitch = clamp(this.pitch, -1.45, 1.45);
     this.lookDX = m.dx;
     this.lookDY = m.dy;
-    const fwd = (this.input.down('KeyW') || this.input.down('ArrowUp') ? 1 : 0) - (this.input.down('KeyS') || this.input.down('ArrowDown') ? 1 : 0);
-    const right = (this.input.down('KeyD') || this.input.down('ArrowRight') ? 1 : 0) - (this.input.down('KeyA') || this.input.down('ArrowLeft') ? 1 : 0);
-    const sprint = this.input.down('ShiftLeft') || this.input.down('ShiftRight');
+    const ax = this.input.enabled ? this.input.axis : { x: 0, y: 0, sprint: false };
+    const fwd = clamp((this.input.down('KeyW') || this.input.down('ArrowUp') ? 1 : 0) - (this.input.down('KeyS') || this.input.down('ArrowDown') ? 1 : 0) + ax.y, -1, 1);
+    const right = clamp((this.input.down('KeyD') || this.input.down('ArrowRight') ? 1 : 0) - (this.input.down('KeyA') || this.input.down('ArrowLeft') ? 1 : 0) + ax.x, -1, 1);
+    const sprint = this.input.down('ShiftLeft') || this.input.down('ShiftRight') || ax.sprint;
     const jump = this.input.consume('Space');
     const before = { x: p.x, z: p.z };
     p.update(dt, { forward: fwd, right, sprint, jump }, this.yaw);
@@ -612,6 +645,7 @@ export class Game {
       }
     }
     this.ui.prompt(best ? best.label : null, best?.color);
+    this.touch?.setUseAvailable(best !== null);
     if (best && this.input.consume('KeyE')) best.act();
     if (this.input.consume('KeyI') && this.weapon) {
       if (this.ui.weaponCardVisible) this.ui.weaponCard(null);
@@ -716,6 +750,7 @@ export class Game {
         vegetation: this.world?.vegetation.stats,
         timings: this.world?.timings,
         geometries: this.renderer.info.memory.geometries,
+        workers: this.world?.pool.stats.workers ?? 0,
       }),
       errors: this.errors,
       autopilot: (road: number, speed: number, perFrame = false, end = 1) => {

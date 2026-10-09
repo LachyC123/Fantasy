@@ -18,7 +18,7 @@ const canvas = document.getElementById('game') as HTMLCanvasElement;
 if (!webglAvailable()) {
   const el = document.getElementById('error')!;
   el.hidden = false;
-  el.textContent = 'Hollow Atlas needs WebGL 2. Please use a current desktop version of Chrome, Edge, Firefox or Safari with hardware acceleration enabled.';
+  el.textContent = 'Hollow Atlas needs WebGL 2. Please use a current version of Chrome, Edge, Firefox or Safari (desktop or mobile) with hardware acceleration enabled.';
 } else {
   const game = new Game(canvas, {
     autotest: params.has('autotest'),

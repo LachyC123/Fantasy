@@ -2,7 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0b12" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Hollow Atlas" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon-180.png" />
     <title>Hollow Atlas: The Unmapped Kingdoms</title>
     <meta name="description" content="A painterly, pixelated first-person fantasy exploration game." />
   </head>
@@ -21,8 +29,9 @@
             <button data-action="open-credits">Credits</button>
           </nav>
           <p class="note" id="title-status">Preparing the vale…</p>
+          <p class="note only-touch portrait-note">Turn your phone sideways for the widest view.</p>
         </div>
-        <p class="version">Milestone 1 · first valley vertical slice</p>
+        <p class="version">Milestone 1 · first valley vertical slice · v0.3</p>
       </section>
 
       <!-- New Journey -->
@@ -59,11 +68,17 @@
           </select>
           <label for="set-fov">Field of view <output id="set-fov-out"></output></label>
           <input id="set-fov" type="range" min="55" max="100" step="1" />
-          <label for="set-sens">Mouse sensitivity <output id="set-sens-out"></output></label>
+          <label for="set-view">View distance</label>
+          <select id="set-view">
+            <option value="short">Short (phones)</option>
+            <option value="medium">Medium</option>
+            <option value="long">Long</option>
+          </select>
+          <label for="set-sens">Look sensitivity <output id="set-sens-out"></output></label>
           <input id="set-sens" type="range" min="0.2" max="3" step="0.05" />
           <label for="set-vol">Volume <output id="set-vol-out"></output></label>
           <input id="set-vol" type="range" min="0" max="1" step="0.05" />
-          <label for="set-invert">Invert mouse Y</label>
+          <label for="set-invert">Invert look Y</label>
           <input id="set-invert" type="checkbox" />
           <label for="set-bob">Head bob</label>
           <input id="set-bob" type="checkbox" />
@@ -122,8 +137,9 @@
 
       <!-- Click to capture the mouse -->
       <div id="capture" hidden>
-        <button data-action="capture">Click to explore</button>
-        <p>Esc releases the mouse and pauses</p>
+        <button data-action="capture"><span class="only-desktop">Click to explore</span><span class="only-touch">Tap to explore</span></button>
+        <p class="only-desktop">Esc releases the mouse and pauses</p>
+        <p class="only-touch">Left thumb walks · drag to look · ❚❚ pauses</p>
       </div>
 
       <!-- Pause -->
@@ -138,6 +154,7 @@
         <div class="controls-list" hidden>
           <p><b>W A S D</b> move · <b>Mouse</b> look · <b>Shift</b> sprint · <b>Space</b> jump</p>
           <p><b>Left click</b> swing · <b>E</b> read / examine / take · <b>I</b> inspect your weapon · <b>Esc</b> pause · <b>F3</b> debug overlay</p>
+          <p class="only-touch"><b>Touch:</b> left thumb anywhere on the left walks (push to the edge to run) · drag elsewhere to look · <b>Swing</b>, <b>Jump</b>, <b>Use</b> and <b>Weapon</b> buttons · <b>❚❚</b> pauses</p>
         </div>
       </section>
 

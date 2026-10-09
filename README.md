@@ -15,8 +15,8 @@ luck, five finds in the vale and creatures in the developer gallery; see
 ## Requirements
 
 - Node.js 20 or newer (developed on Node 22) and npm.
-- A desktop browser with **WebGL 2**: a current Chrome, Edge, Firefox or Safari with hardware
-  acceleration on.
+- A browser with **WebGL 2** and hardware acceleration: a current Chrome, Edge, Firefox or Safari on
+  desktop, or Safari / Chrome on a recent phone or tablet (touch controls appear automatically).
 
 ## Install, run, build
 
@@ -30,12 +30,27 @@ npm run preview      # serve the production build at http://localhost:4173
 Open the URL, choose **New Journey**, keep or change the seed, then press **Begin**. After the intro,
 click **Click to explore** to capture the mouse.
 
+### Playing on a phone or tablet
+
+The game detects a touch screen (no mouse or trackpad) and switches to touch controls and a lighter
+quality preset (no shadows, short view distance). Hold the phone sideways.
+
+- **Same Wi-Fi:** run `npm run dev` (it listens on your network), then open
+  `http://<your computer's LAN IP>:5173` on the phone.
+- **Anywhere:** `npm run build` makes a fully static site in `dist/`; any static host serves it
+  (relative paths, no server code). `node scripts/artifact.mjs <dir>` turns the build into a page
+  body for hosts that add their own `<html>` skeleton, such as a claude.ai Artifact.
+- **Full screen:** Android Chrome goes full screen when you tap *Tap to explore*. On iPhone, use
+  Safari's *Share → Add to Home Screen* (from a static host) to launch it full screen without the
+  browser bars.
+
 ### URL parameters
 
 | Parameter | Effect |
 | --- | --- |
 | `?seed=reference-valley` | Pre-fills and pre-builds this seed. `reference-valley` is the fixed reference seed used for screenshots. |
 | `?autotest` | Test mode: skips the intro and the pointer-lock requirement, and keeps the canvas readable for pixel checks. |
+| `?touch` | Force the touch controls (for trying them with a mouse). |
 | `?gallery` | **Developer gallery** of procedurally generated creatures and weapons on a stage in the vale (← → to browse without end, R random, Tab to switch, luck slider). |
 
 ## Controls
@@ -52,10 +67,23 @@ click **Click to explore** to capture the mouse.
 | Esc | Release the mouse and pause |
 | F3 | Debug overlay (FPS, draw calls, streaming, colliders, validation) |
 
+**Touch:**
+
+| Touch | Action |
+| --- | --- |
+| Thumb down anywhere on the left and slide | Move (a floating stick; push to its edge to run) |
+| Drag anywhere else | Look |
+| **Swing** / **Jump** | Swing your weapon / jump |
+| **Use** (appears when something is in reach), or tap the prompt | Read, examine, take a weapon |
+| **Weapon** | Show the card of the weapon in your hand |
+| **❚❚** | Pause (Resume returns straight to the game) |
+
 ## Settings
 
 Pixel resolution (180p / 270p / 360p internal), light (morning, afternoon, golden hour, dusk), field
-of view, mouse sensitivity, invert Y, head bob, volume, shadows and ink outlines. Settings are stored
+of view, view distance (short / medium / long vegetation range, applied immediately), look
+sensitivity (mouse and touch), invert Y, head bob, volume, shadows and ink outlines. Phones and
+tablets start with shadows off and a short view distance. Settings are stored
 in `localStorage` under `hollow-atlas/settings/v1`.
 
 ## Tests

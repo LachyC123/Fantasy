@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0: Play on phones and tablets
+
+**Added**
+- Touch controls, detected automatically:
+  - a floating thumbstick on the left (push to the edge to run);
+  - drag to look;
+  - Swing, Jump, Use (appears when something is in reach), Weapon and Pause buttons;
+  - prompts can be tapped.
+- Touch-specific hints, capture text and controls list.
+- A *View distance* setting (short / medium / long vegetation ranges), applied without reloading.
+  Phones start with shadows off and a short view distance.
+- Mobile web-app metadata: viewport, safe areas, manifest and home-screen icons. Full screen and
+  landscape lock where the browser allows it.
+- `scripts/artifact.mjs` to publish the static build on hosts that wrap pages in their own skeleton.
+- Tests: a phone-emulation browser test (touch menus, stick walk, drag look, jump, swing, use,
+  weapon card, pause and resume) and a test that the world loads with worker scripts blocked.
+
+**Fixed**
+- If generation workers failed to start (a blocked script, or no module-worker support), loading
+  waited forever. The pool now falls back to main-thread generation, and loading waits correctly
+  across the switch.
+- Render targets fall back to 8-bit on GPUs that cannot render to half-float.
+- Menus scroll on short landscape screens instead of being cut off.
+
 ## 0.2.0: Procedural arsenal and bestiary foundation
 
 **Added**

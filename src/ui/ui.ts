@@ -29,6 +29,8 @@ export class UI {
   private readonly stack: PanelId[] = [];
   onAction: (action: string) => void = () => undefined;
   onSettings: (s: Settings) => void = () => undefined;
+  /** Touch play: prompts name the Use button instead of the E key, and can be tapped. */
+  touch = false;
 
   constructor() {
     this.panels = {
@@ -130,7 +132,7 @@ export class UI {
     }
     this.promptEl.hidden = false;
     const body = color ? `<span style="color:${color}">${escapeHtml(text)}</span>` : escapeHtml(text);
-    this.promptEl.innerHTML = `<b>E</b> — ${body}`;
+    this.promptEl.innerHTML = this.touch ? `<b>Use</b> — ${body}` : `<b>E</b> — ${body}`;
   }
 
   private cardTimer = 0;
@@ -237,6 +239,7 @@ export class UI {
     const bob = $<HTMLInputElement>('#set-bob');
     const sh = $<HTMLInputElement>('#set-shadows');
     const ol = $<HTMLInputElement>('#set-outlines');
+    const vd = $<HTMLSelectElement>('#set-view');
     const outs = (): void => {
       $('#set-fov-out').textContent = `${fov.value}°`;
       $('#set-sens-out').textContent = `${Number(sens.value).toFixed(2)}×`;
@@ -251,6 +254,7 @@ export class UI {
     bob.checked = s.headBob;
     sh.checked = s.shadows;
     ol.checked = s.outlines;
+    vd.value = s.viewDistance;
     outs();
     const emit = (): void => {
       outs();
@@ -264,9 +268,10 @@ export class UI {
         headBob: bob.checked,
         shadows: sh.checked,
         outlines: ol.checked,
+        viewDistance: vd.value as Settings['viewDistance'],
       });
     };
-    for (const el of [res, tod, fov, sens, vol, inv, bob, sh, ol]) el.addEventListener('input', emit);
+    for (const el of [res, tod, fov, sens, vol, inv, bob, sh, ol, vd]) el.addEventListener('input', emit);
   }
 
   settingsStatus(text: string): void {

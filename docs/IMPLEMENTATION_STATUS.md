@@ -3,7 +3,7 @@
 What actually works today, what is a prototype and what is only planned. Every number below
 comes from a run in the development container. Nothing here is estimated or invented.
 
-**Build:** 0.2.0 (Milestone 1 plus the procedural arsenal and bestiary foundation).
+**Build:** 0.3.0 (Milestone 1, the procedural arsenal and bestiary foundation, and touch play on phones).
 **Reference seed:** `reference-valley`.
 **Generator version:** 1.
 
@@ -31,6 +31,7 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Weapon finds in the vale (take/swap, weapon card) | **implemented** | session-only until saves (M4) |
 | Procedural creatures (8 body plans, 16 mutations, 4 tiers, carried weapons) | **prototype** | generator and meshes only, shown in `?gallery`; not in the world, no AI or animation |
 | Developer gallery (`?gallery`) | **implemented** | developer tool |
+| Phones and tablets (touch controls, lighter preset, mobile metadata) | **implemented** | tested in Chromium phone emulation; not yet tried on a real device |
 | Interiors, NPCs, dialogue, trade | **planned** | M2, M7 |
 | Atlas, chests, notes, inventory, quests | **planned** | M4 |
 | Combat (hit detection, block, dodge, enemies in the world) | **planned** | M5 |
@@ -45,19 +46,21 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Typecheck and build | `npm run build` | clean |
 | Unit and generation tests | `npm test` | **47 / 47 passed** (6 files) |
 | World validation sweep | `npx vite-node scripts/validate.ts -- 40` | **40 / 40 seeds valid** |
-| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **5 / 5 passed** in 6.8 min |
+| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **7 / 7 passed** in 8.2 min |
 
 Browser test durations:
 
 | Test | Time |
 | --- | --- |
-| Gallery | 21 s |
-| Title and menus | 50 s |
-| Journey | 59 s |
+| Gallery | 22 s |
+| Phone (touch controls) | 1.2 min |
+| Title and menus | 56 s |
+| Journey | 57 s |
 | Wall collision | 27 s |
-| Streaming travel | 4.0 min |
+| Worker scripts blocked (fallback) | 25 s |
+| Streaming travel | 3.9 min |
 
-During the streaming travel test the geometry count went from 309 to 586 (bounded), with 29,244
+During the streaming travel test the geometry count went from 288 to 586 (bounded), with 29,244
 trees and 1,425 vegetation chunks loaded. No errors were reported.
 
 An earlier version of the streaming browser test walked the whole road and timed out after 8 minutes, because
@@ -91,6 +94,7 @@ All screenshots are real captures from the production build at 1280×720, made w
 | `08-view-model.png` | Gloved hand and starter longsword (inspect mode) |
 | `09-weapon-find-castle-gate.png` | Blade stuck in the road at the castle gate, with its *Take* prompt |
 | `10-weapon-find-waystone.png` | Axe leaning at the waystone, with its *Take* prompt |
+| `11-phone-touch-controls.png` | Phone emulation (844×390): stick, Use, Jump, Swing, Weapon and Pause controls with the first touch hint |
 
 In shots 09 and 10 the castle's arrival banner is still on screen. It is the real banner, which
 lasts 5 seconds of game time; at software-rendering frame rates it outlasts the capture wait.

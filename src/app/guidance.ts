@@ -29,6 +29,15 @@ const STEPS: Step[] = [
   { html: 'Follow the path down to the vale. <b>E</b> reads signs and stones.', done: (s) => s.moved > 140 || s.interacted },
 ];
 
+const TOUCH_STEPS: Step[] = [
+  { html: 'Hold your <b>left thumb</b> down and slide it to walk', done: (s) => s.moved > 4 },
+  { html: '<b>Drag</b> on the right to look around', done: (s) => s.looked > 400 },
+  { html: 'Push the stick <b>to its edge</b> to run', done: (s) => s.sprinted > 6 },
+  { html: 'Tap <b>Jump</b>', done: (s) => s.jumped },
+  { html: 'Tap <b>Swing</b> to swing your sword', done: (s) => s.swung },
+  { html: 'Follow the path down to the vale. <b>Use</b> reads signs and stones.', done: (s) => s.moved > 140 || s.interacted },
+];
+
 interface Place {
   id: string;
   kicker: string;
@@ -45,11 +54,14 @@ export class Guidance {
   private gap = 1.2;
   private readonly places: Place[];
   private readonly seen = new Set<string>();
+  private readonly steps: Step[];
 
   constructor(
     private readonly ui: UI,
     plan: WorldPlan,
+    touch = false,
   ) {
+    this.steps = touch ? TOUCH_STEPS : STEPS;
     this.places = [];
     for (const s of plan.settlements) {
       if (s.kind === 'hamlet') this.places.push({ id: s.id, kicker: 'Hamlet', name: s.name, x: s.x, z: s.z, radius: 80 });
@@ -61,13 +73,13 @@ export class Guidance {
 
   update(dt: number, px: number, pz: number): void {
     // Control hints.
-    if (this.step < STEPS.length) {
+    if (this.step < this.steps.length) {
       if (this.gap > 0) {
         this.gap -= dt;
-        if (this.gap <= 0) this.ui.hint(STEPS[this.step]!.html);
+        if (this.gap <= 0) this.ui.hint(this.steps[this.step]!.html);
       } else {
         this.stepTimer += dt;
-        if (STEPS[this.step]!.done(this.state) || this.stepTimer > 14) {
+        if (this.steps[this.step]!.done(this.state) || this.stepTimer > 14) {
           this.step++;
           this.stepTimer = 0;
           this.gap = 1.4;
@@ -86,7 +98,7 @@ export class Guidance {
   }
 
   skipHints(): void {
-    this.step = STEPS.length;
+    this.step = this.steps.length;
     this.ui.hint(null);
   }
 }

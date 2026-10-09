@@ -172,6 +172,15 @@ export class PixelPipeline {
     this.resize();
   }
 
+  /**
+   * Half-float scene targets keep the tone map smooth; GPUs that cannot render to them
+   * (some older phones) fall back to 8-bit, which the dither and posterise hide well.
+   */
+  private targetType(): THREE.TextureDataType {
+    const ext = this.renderer.extensions;
+    return ext.has('EXT_color_buffer_half_float') || ext.has('EXT_color_buffer_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
+  }
+
   get lowSize(): { w: number; h: number } {
     return { w: this.lowW, h: this.lowH };
   }
@@ -201,14 +210,14 @@ export class PixelPipeline {
     const depthTexture = new THREE.DepthTexture(lowW, lowH);
     depthTexture.type = THREE.UnsignedIntType;
     this.rtScene = new THREE.WebGLRenderTarget(lowW, lowH, {
-      type: THREE.HalfFloatType,
+      type: this.targetType(),
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
       depthTexture,
       depthBuffer: true,
     });
     this.rtRays = new THREE.WebGLRenderTarget(Math.ceil(lowW / 2), Math.ceil(lowH / 2), {
-      type: THREE.HalfFloatType,
+      type: this.targetType(),
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
       depthBuffer: false,

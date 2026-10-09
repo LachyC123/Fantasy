@@ -48,6 +48,8 @@ the intro and pointer lock and keeps the canvas readable.
 | `e2e/smoke.spec.ts`: journey | New Journey → Begin reaches gameplay; the real **W** key moves the player; **Space** leaves and regains the ground; a click starts a sword swing; standing at the junction signpost shows the *Read signpost* prompt and **E** shows its text; **Esc** pauses and **Resume** continues; Return to Title works; world validation is clean; no errors |
 | `e2e/smoke.spec.ts`: collision | Walking into a hamlet cottage for 4 s never puts the player inside the wall |
 | `e2e/gallery.spec.ts` | `?gallery` loads; next, prev, tab and keyboard navigation change the specimen; the frame is not blank; no errors |
+| `e2e/smoke.spec.ts`: worker fallback | With the worker script blocked, the world still loads on the main thread (0 workers, terrain and trees present) without errors |
+| `e2e/mobile.spec.ts` | A landscape phone (844×390, touch only, detected rather than forced): the phone quality preset; tap through the menus; the thumbstick walks; a drag turns the view; Jump, Swing, Use (at the signpost), Weapon card and Pause buttons work; Resume returns to play; no errors |
 | `e2e/streaming.spec.ts` | Autopilot walks the footpath and the first 30% of the Vale Road while the workers stream the world. It asserts the vegetation loads, the geometry count stays bounded, the final frame is not blank and there are no errors. It checks correctness only, because headless rendering runs below 1 FPS. |
 
 ## 4. Visual review

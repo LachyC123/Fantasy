@@ -635,3 +635,226 @@ code {
     padding-left: 16px;
   }
 }
+
+/* ------------------------------------------------------------ phones and tablets */
+
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+#game {
+  height: 100dvh;
+  touch-action: none;
+}
+
+body.touch {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body:not(.touch) .only-touch,
+body.touch .only-desktop {
+  display: none !important;
+}
+
+body.touch button {
+  touch-action: manipulation;
+}
+
+/* Prompts can be tapped to use the thing in front of you. */
+body.touch #hud .prompt {
+  pointer-events: auto;
+  top: 60%;
+  padding: 8px 18px;
+}
+
+body.touch #hud .hint-line {
+  bottom: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  max-width: calc(100vw - 260px);
+  font-size: 17px;
+}
+
+body.touch #hud .banner {
+  top: 24%;
+}
+
+/* The weapon card sits top-left, clear of the stick and the action buttons. */
+body.touch #hud .weapon-card {
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+  right: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 66px);
+  transform: none;
+  width: min(330px, 44vw);
+  max-height: calc(100dvh - 66px - 10px);
+  overflow: hidden;
+  font-size: 13px;
+  padding: 10px 14px;
+}
+
+body.touch #hud .weapon-card .wc-name {
+  font-size: 18px;
+}
+
+body.touch #hud .weapon-card .wc-note {
+  display: none;
+}
+
+body.touch .crosshair {
+  opacity: 0.6;
+}
+
+#touch {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  pointer-events: none;
+}
+
+#touch > * {
+  pointer-events: auto;
+}
+
+.touch-surface {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.touch-stick {
+  position: absolute;
+  left: calc(env(safe-area-inset-left, 0px) + 96px);
+  top: calc(100% - env(safe-area-inset-bottom, 0px) - 96px);
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: 50%;
+  border: 2px solid rgba(243, 230, 200, 0.28);
+  background: rgba(15, 12, 22, 0.18);
+  pointer-events: none !important;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+.touch-stick.active {
+  opacity: 1;
+  transition: none;
+}
+
+.touch-stick.sprint {
+  border-color: var(--gold);
+}
+
+.touch-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  background: rgba(243, 230, 200, 0.42);
+  box-shadow: 0 0 0 2px rgba(20, 14, 30, 0.5);
+}
+
+.tb {
+  position: absolute;
+  font-family: var(--font);
+  color: var(--ink);
+  background: rgba(15, 12, 22, 0.42);
+  border: 1px solid var(--panel-edge);
+  border-radius: 50%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  padding: 0;
+}
+
+.tb.held {
+  background: rgba(227, 184, 102, 0.42);
+}
+
+.tb-swing {
+  right: calc(env(safe-area-inset-right, 0px) + 22px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+  width: 86px;
+  height: 86px;
+  font-size: 19px;
+}
+
+.tb-jump {
+  right: calc(env(safe-area-inset-right, 0px) + 122px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+  width: 64px;
+  height: 64px;
+  font-size: 16px;
+}
+
+.tb-use {
+  right: calc(env(safe-area-inset-right, 0px) + 30px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 122px);
+  width: 70px;
+  height: 70px;
+  font-size: 18px;
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.tb-pause {
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  width: 44px;
+  height: 44px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.tb-card {
+  right: calc(env(safe-area-inset-right, 0px) + 12px);
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  height: 40px;
+  padding: 0 12px;
+  font-size: 15px;
+  border-radius: 8px;
+}
+
+.portrait-note {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  body.touch .portrait-note {
+    display: block;
+    color: var(--gold);
+  }
+}
+
+/* Short landscape phone screens: compact menus that scroll instead of clipping. */
+@media (max-height: 520px) {
+  .panel {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #title h1 {
+    font-size: 44px;
+    margin: 0;
+  }
+  #title .subtitle {
+    margin: 0 0 8px;
+  }
+  .panel {
+    background: rgba(22, 18, 30, 0.97);
+    padding: 16px 20px;
+  }
+  .panel h2 {
+    font-size: 26px;
+    margin-bottom: 10px;
+  }
+  .banner {
+    top: 8%;
+  }
+}

@@ -106,3 +106,15 @@ test('player cannot walk through a cottage wall', async ({ page }) => {
   const along = (p.x - before.b.x) * s + (p.z - before.b.z) * c;
   expect(along).toBeGreaterThan(before.b.depth / 2);
 });
+
+test('the world still loads when worker scripts are blocked (main-thread fallback)', async ({ page }) => {
+  await page.route('**/genWorker*', (r) => r.abort());
+  const errors = await openGame(page);
+  const stats = await api<{ vegetation: { trees: number }; terrain: { nodes: number }; workers: number }>(page, 'stats');
+  expect(stats.workers).toBe(0);
+  expect(stats.terrain.nodes).toBeGreaterThan(10);
+  expect(stats.vegetation.trees).toBeGreaterThan(100);
+  // The failed worker load is reported by the browser itself; nothing else may error.
+  expect(errors.filter((e) => !/genWorker|Failed to load resource|net::ERR_FAILED/i.test(e))).toEqual([]);
+  expect(await api<string[]>(page, 'errorList')).toEqual([]);
+});
