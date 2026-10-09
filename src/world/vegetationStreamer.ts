@@ -33,11 +33,19 @@ interface ChunkData {
   cx: number;
   cz: number;
   trees?: TreeChunkData;
-  treeMaps?: { full: Map<string, Packed>; thin: Map<string, Packed>; thinner: Map<string, Packed> };
+  /** Packed instances tagged with their batch index (no string lookups per frame). */
+  treeSets?: { full: Tagged[]; thin: Tagged[]; thinner: Tagged[] };
   ground?: GroundChunkData;
-  groundMap?: Map<string, Packed>;
+  groundSet?: Tagged[];
   grass?: GrassChunkData;
 }
+
+interface Tagged {
+  bi: number;
+  p: Packed;
+}
+
+const ckey = (cx: number, cz: number): number => (cx + 32768) * 65536 + (cz + 32768);
 
 export interface TreeCollider {
   x: number;
@@ -48,7 +56,7 @@ export interface TreeCollider {
 class InstanceBatch {
   readonly meshes: THREE.InstancedMesh[] = [];
   private capacity = 0;
-  private signature = '';
+  private signature = -1;
 
   constructor(
     private readonly parent: THREE.Group,
@@ -57,10 +65,18 @@ class InstanceBatch {
     readonly name: string,
   ) {}
 
-  /** Upload concatenated instance data only if the contributing chunks changed. */
-  set(chunks: Packed[], signature: string): number {
+  /** Instances currently uploaded. */
+  count = 0;
+
+  changed(signature: number): boolean {
+    return signature !== this.signature;
+  }
+
+  /** Upload concatenated instance data (call only when `changed`). */
+  set(chunks: Packed[], signature: number): number {
     let total = 0;
     for (const c of chunks) total += c.count;
+    this.count = total;
     if (signature === this.signature) return total;
     this.signature = signature;
     if (total > this.capacity) this.allocate(Math.max(64, Math.ceil(total * 1.5)));
@@ -125,7 +141,12 @@ const VEG_PRIORITY = 600000;
 export class VegetationStreamer {
   readonly group = new THREE.Group();
   private readonly opts: VegetationOptions;
-  private readonly chunks = new Map<string, ChunkData>();
+  private readonly chunks = new Map<number, ChunkData>();
+  /** Batch key → index, and index → batches per LOD (built once). */
+  private readonly treeIndex = new Map<string, number>();
+  private readonly groundIndex = new Map<string, number>();
+  private treeBatchList: InstanceBatch[][] = [[], [], []];
+  private groundBatchList: InstanceBatch[] = [];
   private readonly requested = new Set<string>();
   private readonly treeAssets = new Map<string, TreeAsset>();
   private readonly nearBatches = new Map<string, InstanceBatch>();
@@ -137,6 +158,11 @@ export class VegetationStreamer {
   private lastCell = '';
   private dirty = true;
   private lastRebuild = 0;
+  private lodCell = '';
+  /** Batches waiting to upload, applied a few at a time so no frame stalls. */
+  private uploads = new Map<InstanceBatch, { list: Packed[]; sig: number; growth: number }>();
+  /** Per-frame upload budget in milliseconds. */
+  uploadBudgetMs = 2;
   colliders: TreeCollider[] = [];
   collidersVersion = 0;
   stats = { chunks: 0, trees: 0, ground: 0, grass: 0, pending: 0, rebuildMs: 0 };
@@ -169,6 +195,16 @@ export class VegetationStreamer {
     }
     this.grassBatch = new InstanceBatch(this.group, parts(groundAsset('grass', 0)), false, 'grass');
     this.wheatBatches = [0, 1].map((v) => new InstanceBatch(this.group, parts(groundAsset('wheat', v)), false, `crop ${v}`));
+    for (const key of this.nearBatches.keys()) {
+      this.treeIndex.set(key, this.treeIndex.size);
+      this.treeBatchList[0]!.push(this.nearBatches.get(key)!);
+      this.treeBatchList[1]!.push(this.midBatches.get(key)!);
+      this.treeBatchList[2]!.push(this.farBatches.get(key)!);
+    }
+    for (const [key, b] of this.groundBatches) {
+      this.groundIndex.set(key, this.groundIndex.size);
+      this.groundBatchList.push(b);
+    }
   }
 
   treeAsset(species: TreeSpecies, variant: number): TreeAsset {
@@ -176,7 +212,7 @@ export class VegetationStreamer {
   }
 
   private chunk(cx: number, cz: number): ChunkData {
-    const key = `${cx}:${cz}`;
+    const key = ckey(cx, cz);
     let c = this.chunks.get(key);
     if (!c) this.chunks.set(key, (c = { cx, cz }));
     return c;
@@ -196,7 +232,7 @@ export class VegetationStreamer {
         const cz = ccz + dz;
         const d = Math.hypot((cx + 0.5) * size - cam.x, (cz + 0.5) * size - cam.z);
         if (d > R + size) continue;
-        const c = this.chunks.get(`${cx}:${cz}`);
+        const c = this.chunks.get(ckey(cx, cz));
         if (!c?.trees) out.push({ cx, cz, need: 'trees', pr: d });
         if (d < this.opts.groundRadius + size && !c?.ground) out.push({ cx, cz, need: 'ground', pr: d * 0.8 });
         if (d < this.opts.grassRadius + size && !c?.grass) out.push({ cx, cz, need: 'grass', pr: d * 0.6 });
@@ -215,11 +251,12 @@ export class VegetationStreamer {
       if (need === 'trees') {
         const t = data as TreeChunkData;
         c.trees = t;
-        c.treeMaps = { full: new Map(t.trees), thin: new Map(t.thin), thinner: new Map(t.thinner) };
+        const tag = (list: [string, Packed][]): Tagged[] => list.map(([k, p]) => ({ bi: this.treeIndex.get(k)!, p }));
+        c.treeSets = { full: tag(t.trees), thin: tag(t.thin), thinner: tag(t.thinner) };
       } else if (need === 'ground') {
         const g = data as GroundChunkData;
         c.ground = g;
-        c.groundMap = new Map(g.ground);
+        c.groundSet = g.ground.map(([k, p]) => ({ bi: this.groundIndex.get(k)!, p }));
       } else c.grass = data as GrassChunkData;
       this.dirty = true;
     });
@@ -239,7 +276,7 @@ export class VegetationStreamer {
     );
     this.lastCell = '';
     this.update(cam);
-    this.rebuild(cam);
+    this.rebuildNow(cam);
   }
 
   update(cam: THREE.Vector3): void {
@@ -265,9 +302,36 @@ export class VegetationStreamer {
       this.dirty = true;
     }
     this.stats.pending = this.requested.size;
-    // Rebuild at most ~6 times a second while data streams in.
+    // Ring membership follows the camera on a 32 m grid, which limits churn.
+    const lodCell = `${Math.floor(cam.x / 32)}:${Math.floor(cam.z / 32)}`;
     const now = performance.now();
-    if (this.dirty && now - this.lastRebuild > 160) this.rebuild(cam);
+    if (lodCell !== this.lodCell || (this.dirty && now - this.lastRebuild > 250)) {
+      this.lodCell = lodCell;
+      this.rebuild(cam);
+    }
+    this.flushUploads(this.uploadBudgetMs);
+  }
+
+  /** Apply pending batch uploads within a time budget (growing batches first). */
+  private flushUploads(budgetMs: number): void {
+    if (!this.uploads.size) return;
+    const t0 = performance.now();
+    const order = [...this.uploads.entries()].sort((a, b) => b[1].growth - a[1].growth);
+    for (const [batch, u] of order) {
+      batch.set(u.list, u.sig);
+      this.uploads.delete(batch);
+      if (performance.now() - t0 > budgetMs) break;
+    }
+  }
+
+  get pendingUploads(): number {
+    return this.uploads.size;
+  }
+
+  /** Rebuild and upload everything now (loading; tests). */
+  rebuildNow(cam: THREE.Vector3): void {
+    this.rebuild(cam);
+    this.flushUploads(Infinity);
   }
 
   private rebuild(cam: THREE.Vector3): void {
@@ -275,66 +339,91 @@ export class VegetationStreamer {
     this.dirty = false;
     this.lastRebuild = t0;
     const size = this.opts.chunk;
-    type Which = 'near' | 'mid' | 'far' | 'ground';
-    const lists: Record<Which, Map<string, Packed[]>> = { near: new Map(), mid: new Map(), far: new Map(), ground: new Map() };
-    const sigs: Record<Which, Map<string, string>> = { near: new Map(), mid: new Map(), far: new Map(), ground: new Map() };
-    const add = (which: Which, key: string, p: Packed, tag: string): void => {
-      let l = lists[which].get(key);
-      if (!l) lists[which].set(key, (l = []));
-      l.push(p);
-      sigs[which].set(key, (sigs[which].get(key) ?? '') + tag);
-    };
+    const nT = this.treeIndex.size;
+    const nG = this.groundIndex.size;
+    // lists[lod][batch] and FNV-style numeric signatures per batch.
+    const treeLists: Packed[][][] = [0, 1, 2].map(() => Array.from({ length: nT }, () => []));
+    const treeSigs = [0, 1, 2].map(() => new Uint32Array(nT).fill(2166136261));
+    const groundLists: Packed[][] = Array.from({ length: nG }, () => []);
+    const groundSigs = new Uint32Array(nG).fill(2166136261);
+    const mixSig = (h: number, v: number): number => Math.imul(h ^ (v | 0), 16777619) >>> 0;
     const grass: Packed[] = [];
     const wheat: Packed[][] = [[], []];
-    let grassSig = '';
+    let grassSig = 2166136261;
     const colliders: TreeCollider[] = [];
     let chunks = 0;
-    // Deterministic iteration order keeps batch signatures stable.
-    const ordered = [...this.chunks.values()].sort((a, b) => a.cx - b.cx || a.cz - b.cz);
-    for (const c of ordered) {
-      const d = Math.hypot((c.cx + 0.5) * size - cam.x, (c.cz + 0.5) * size - cam.z);
-      if (d > this.opts.treeFar + size) continue;
-      chunks++;
-      const tag = `${c.cx},${c.cz};`;
-      if (c.treeMaps) {
-        const lod: Which = d < this.opts.treeNear ? 'near' : d < this.opts.treeMid ? 'mid' : 'far';
-        const thinner = d >= (this.opts.treeMid + this.opts.treeFar) / 2;
-        const source = lod !== 'far' ? c.treeMaps.full : thinner ? c.treeMaps.thinner : c.treeMaps.thin;
-        const sourceTag = lod !== 'far' ? '' : thinner ? 'tt' : 't';
-        for (const [key, p] of source) add(lod, key, p, tag + sourceTag);
-      }
-      if (c.groundMap && d < this.opts.groundRadius + size * 0.5) for (const [key, p] of c.groundMap) add('ground', key, p, tag);
-      if (c.grass && d < this.opts.grassRadius + size * 0.5) {
-        grass.push(c.grass.grass);
-        wheat[0]!.push(c.grass.wheat[0]!);
-        wheat[1]!.push(c.grass.wheat[1]!);
-        grassSig += tag;
-      }
-      if (d < this.opts.colliderRadius + size) {
-        const l = c.trees?.list;
-        if (l) {
-          for (let i = 0; i < l.length; i += 5) {
-            const asset = this.treeAsset(TREE_SPECIES[l[i]!]!, l[i + 1]!);
-            colliders.push({ x: l[i + 2]!, z: l[i + 3]!, r: Math.max(0.2, asset.trunkRadius * l[i + 4]! * 0.95) });
+    // Walk only the ring of chunks in range, in a fixed order (no sorting, no cache scan).
+    const R = this.opts.treeFar + size;
+    const ccx = Math.floor(cam.x / size);
+    const ccz = Math.floor(cam.z / size);
+    const rc = Math.ceil(R / size);
+    const midFar = (this.opts.treeMid + this.opts.treeFar) / 2;
+    for (let dx = -rc; dx <= rc; dx++) {
+      for (let dz = -rc; dz <= rc; dz++) {
+        const c = this.chunks.get(ckey(ccx + dx, ccz + dz));
+        if (!c) continue;
+        const ddx = (c.cx + 0.5) * size - cam.x;
+        const ddz = (c.cz + 0.5) * size - cam.z;
+        const d = Math.sqrt(ddx * ddx + ddz * ddz);
+        if (d > R) continue;
+        chunks++;
+        const tag = (c.cx * 73856093) ^ (c.cz * 19349663);
+        if (c.treeSets) {
+          const lod = d < this.opts.treeNear ? 0 : d < this.opts.treeMid ? 1 : 2;
+          const thinner = d >= midFar;
+          const source = lod < 2 ? c.treeSets.full : thinner ? c.treeSets.thinner : c.treeSets.thin;
+          const stag = tag ^ (lod < 2 ? 0 : thinner ? 0x5bd1e995 : 0x27d4eb2d);
+          const lists = treeLists[lod]!;
+          const sigs = treeSigs[lod]!;
+          for (const t of source) {
+            lists[t.bi]!.push(t.p);
+            sigs[t.bi] = mixSig(sigs[t.bi]!, stag);
           }
         }
-        const s = c.ground?.solids;
-        if (s) for (let i = 0; i < s.length; i += 4) colliders.push({ x: s[i + 1]!, z: s[i + 2]!, r: (GROUND_LAYERS[s[i]!] === 'boulder' ? 1.4 : 0.4) * s[i + 3]! });
+        if (c.groundSet && d < this.opts.groundRadius + size * 0.5) {
+          for (const t of c.groundSet) {
+            groundLists[t.bi]!.push(t.p);
+            groundSigs[t.bi] = mixSig(groundSigs[t.bi]!, tag);
+          }
+        }
+        if (c.grass && d < this.opts.grassRadius + size * 0.5) {
+          grass.push(c.grass.grass);
+          wheat[0]!.push(c.grass.wheat[0]!);
+          wheat[1]!.push(c.grass.wheat[1]!);
+          grassSig = mixSig(grassSig, tag);
+        }
+        if (d < this.opts.colliderRadius + size) {
+          const l = c.trees?.list;
+          if (l) {
+            for (let i = 0; i < l.length; i += 5) {
+              const asset = this.treeAsset(TREE_SPECIES[l[i]!]!, l[i + 1]!);
+              colliders.push({ x: l[i + 2]!, z: l[i + 3]!, r: Math.max(0.2, asset.trunkRadius * l[i + 4]! * 0.95) });
+            }
+          }
+          const s = c.ground?.solids;
+          if (s) for (let i = 0; i < s.length; i += 4) colliders.push({ x: s[i + 1]!, z: s[i + 2]!, r: (GROUND_LAYERS[s[i]!] === 'boulder' ? 1.4 : 0.4) * s[i + 3]! });
+        }
       }
     }
+    // Queue only the batches whose contributing chunks changed.
+    const queue = (b: InstanceBatch, list: Packed[], sig: number): number => {
+      let total = 0;
+      for (const p of list) total += p.count;
+      if (b.changed(sig)) this.uploads.set(b, { list, sig, growth: total - b.count });
+      else this.uploads.delete(b);
+      return total;
+    };
     let trees = 0;
-    for (const [key, b] of this.nearBatches) trees += b.set(lists.near.get(key) ?? [], sigs.near.get(key) ?? '');
-    for (const [key, b] of this.midBatches) trees += b.set(lists.mid.get(key) ?? [], sigs.mid.get(key) ?? '');
-    for (const [key, b] of this.farBatches) trees += b.set(lists.far.get(key) ?? [], sigs.far.get(key) ?? '');
+    for (let lod = 0; lod < 3; lod++) for (let i = 0; i < nT; i++) trees += queue(this.treeBatchList[lod]![i]!, treeLists[lod]![i]!, treeSigs[lod]![i]!);
     let ground = 0;
-    for (const [key, b] of this.groundBatches) ground += b.set(lists.ground.get(key) ?? [], sigs.ground.get(key) ?? '');
-    const g = this.grassBatch.set(grass, grassSig);
-    this.wheatBatches.forEach((b, i) => b.set(wheat[i]!, grassSig));
+    for (let i = 0; i < nG; i++) ground += queue(this.groundBatchList[i]!, groundLists[i]!, groundSigs[i]!);
+    const g = queue(this.grassBatch, grass, grassSig);
+    this.wheatBatches.forEach((b, i) => queue(b, wheat[i]!, grassSig));
     if (colliders.length !== this.colliders.length || colliders.some((c, i) => c.x !== this.colliders[i]!.x || c.z !== this.colliders[i]!.z)) {
       this.colliders = colliders;
       this.collidersVersion++;
     }
-    // Bound the cache.
+    // Bound the cache (scanned rarely: only when it has grown large).
     if (this.chunks.size > 2600) {
       for (const [k, c] of this.chunks) {
         const d = Math.hypot((c.cx + 0.5) * size - cam.x, (c.cz + 0.5) * size - cam.z);

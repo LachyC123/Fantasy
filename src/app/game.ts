@@ -75,7 +75,7 @@ export class Game {
   readonly errors: string[] = [];
   /** Rolling CPU timings (ms) of the world streaming update, for perf tests and the overlay. */
   readonly perf = { worldMs: [] as number[] };
-  private autopilot: { road: number; index: number; speed: number; perFrame: boolean } | null = null;
+  private autopilot: { road: number; index: number; speed: number; perFrame: boolean; end: number } | null = null;
 
   /** Test/benchmark helper: travel along a planned road at a fixed speed, streaming as a player would. */
   private stepAutopilot(dt: number): void {
@@ -83,14 +83,15 @@ export class Game {
     const road = this.world?.plan.roads[a.road];
     if (!road || !this.player) return;
     // perFrame: advance a fixed distance each frame (stress mode independent of frame rate).
-    a.index = Math.min(road.points.length - 1, a.index + (a.perFrame ? a.speed : a.speed * dt) / 2);
+    const last = Math.floor((road.points.length - 1) * a.end);
+    a.index = Math.min(last, a.index + (a.perFrame ? a.speed : a.speed * dt) / 2);
     const i = Math.floor(a.index);
     const p = road.points[i]!;
     const q = road.points[Math.min(i + 6, road.points.length - 1)]!;
     this.player.teleport(p.x, p.z);
     this.yaw = Math.atan2(-(q.x - p.x), -(q.z - p.z));
     this.pitch = 0;
-    if (i >= road.points.length - 1) this.autopilot = null;
+    if (i >= last) this.autopilot = null;
   }
 
   constructor(
@@ -717,8 +718,8 @@ export class Game {
         geometries: this.renderer.info.memory.geometries,
       }),
       errors: this.errors,
-      autopilot: (road: number, speed: number, perFrame = false) => {
-        this.autopilot = { road, index: 0, speed, perFrame };
+      autopilot: (road: number, speed: number, perFrame = false, end = 1) => {
+        this.autopilot = { road, index: 0, speed, perFrame, end };
       },
       errorList: () => this.errors.slice(),
       weapon: () => this.weapon,

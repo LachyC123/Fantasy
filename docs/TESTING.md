@@ -22,6 +22,7 @@ npm test
 | `tests/world.test.ts` | The same seed gives an identical plan; another seed gives a different layout under the same anchor composition; every building has its own recipe; adjacent terrain nodes share exact border heights and normals (**no seams**); buildings sit on their pads; the castle summit is flat and the spawn walkable; roads reach the castle gate and the spawn within grade limits; terrain is graded to the road crown; trees, ground cover and grass scatter **identically whatever the chunk size or load order**; no trees on roads or the castle summit; the spawn sightline stays clear; **full spatial validation passes for 8 seeds** |
 | `tests/weapons.test.ts` | Weapons are deterministic; rarity matches the odds (±5σ, including the mythic tail); luck shifts the odds both ways; 5,000 of 5,000 shapes are distinct; stats and names are sane for every class; finite meshes for every class; the starter weapon and finds are deterministic per seed |
 | `tests/creatures.test.ts` | Creatures are deterministic; tier odds, including a rare mythic tail; danger scales with tier; champions are named; 4,000 of 4,000 forms are distinct; biome and plan constraints hold; only armed plans carry weapons; finite meshes for every plan and tier |
+| `tests/streaming.test.ts` | **Streaming benchmark.** The real terrain and vegetation streamers walk the footpath and the whole Vale Road (328 steps of 6 m, far faster than a player moves). Generation runs inline and is excluded from the timing; in the browser it runs in workers. It asserts main-thread cost per step (replans, uploads, batch rebuilds) of p95 < 8 ms and max < 40 ms. The last run measured p50 3.1 ms, p95 7.2 ms, max 15.8 ms. |
 | `tests/controller.test.ts` | Box push-out; walk and sprint speeds; yaw-relative movement; walls block and the player slides along them; step-up onto 0.4 m stones but not 1.1 m blocks; jumping and landing; the steep-slope limit (gentle slopes stay climbable); the reference spawn is grounded and the footpath walkable |
 
 Wider seed sweep (also builds every collider):
@@ -47,7 +48,7 @@ the intro and pointer lock and keeps the canvas readable.
 | `e2e/smoke.spec.ts`: journey | New Journey → Begin reaches gameplay; the real **W** key moves the player; **Space** leaves and regains the ground; a click starts a sword swing; standing at the junction signpost shows the *Read signpost* prompt and **E** shows its text; **Esc** pauses and **Resume** continues; Return to Title works; world validation is clean; no errors |
 | `e2e/smoke.spec.ts`: collision | Walking into a hamlet cottage for 4 s never puts the player inside the wall |
 | `e2e/gallery.spec.ts` | `?gallery` loads; next, prev, tab and keyboard navigation change the specimen; the frame is not blank; no errors |
-| `e2e/streaming.spec.ts` | Autopilot travels the footpath and then the whole Vale Road to the castle gate at a fixed 5 m per frame (deliberate worst case). It asserts world-streaming CPU p95 < 16 ms and max < 120 ms per frame, a bounded geometry count (no leak), arrival at the gate, a non-blank final frame and no errors |
+| `e2e/streaming.spec.ts` | Autopilot walks the footpath and the first 30% of the Vale Road while the workers stream the world. It asserts the vegetation loads, the geometry count stays bounded, the final frame is not blank and there are no errors. It checks correctness only, because headless rendering runs below 1 FPS. |
 
 ## 4. Visual review
 
@@ -64,8 +65,10 @@ renders only the view model against a neutral background.
 
 ## 5. Performance (honest status)
 
-- **Measured in this environment (software rendering, so not representative):** world-streaming
-  CPU cost per frame from the streaming test (see IMPLEMENTATION_STATUS.md for the latest numbers).
+- **Measured (deterministic, Node):** main-thread streaming cost during sustained travel. The
+  `tests/streaming.test.ts` benchmark found a 20–30 ms stall per batch rebuild, which led to the
+  worker generation pool, time-sliced uploads and integer-indexed rebuilds. Now p50 3.1 ms, p95
+  7.2 ms.
   Triangles per frame at the spawn vista are about 3.7 M including the shadow pass, with about 350
   draw calls.
 - **Not yet measured:** real FPS on desktop GPUs. Run the game, press **F3** and read *FPS*,
