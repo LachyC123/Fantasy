@@ -71,7 +71,7 @@ quality preset (no shadows, short view distance). Hold the phone sideways.
 | Shift | Run |
 | Space | Jump |
 | Left click | Swing your weapon (there are no enemies yet; combat is Milestone 5) |
-| E | Read signposts, examine waystones and shrines, look into wells, **open a chest**, **take a weapon** |
+| E | Read signposts, examine waystones and shrines, look into wells, **talk to villagers**, **open doors and chests**, **take a weapon** |
 | I | Show the card of the weapon in your hand |
 | M | Open or close the **Hollow Atlas** (+ / − or the mouse wheel to zoom) |
 | Esc | Release the mouse and pause |
@@ -84,7 +84,7 @@ quality preset (no shadows, short view distance). Hold the phone sideways.
 | Thumb down anywhere on the left and slide | Move (a floating stick; push to its edge to run) |
 | Drag anywhere else | Look |
 | **Swing** / **Jump** | Swing your weapon / jump |
-| **Use** (appears when something is in reach), or tap the prompt | Read, examine, take a weapon |
+| **Use** (appears when something is in reach), or tap the prompt | Read, examine, talk, open, take a weapon |
 | **Weapon** | Show the card of the weapon in your hand |
 | **Map** | Open the Hollow Atlas (also in the pause menu) |
 | **❚❚** | Pause (Resume returns straight to the game) |
@@ -100,6 +100,9 @@ There is no path you have to follow. Some ways to explore:
   undiscovered is close by.
 - Check the Atlas. It inks in only the ground you have travelled near, and lists every place you
   have found.
+- Ask the locals. Villagers tell you of real places nearby you haven't found, with the direction
+  and how far it is. The Atlas marks each one with a "?" until you get there.
+- Inns are open. Step inside, warm up by the hearth, and look upstairs.
 - New Journey suggests a random seed every time, so each journey is a different world. Type a seed
   to revisit one, or use `reference-valley` for the reference world.
 

@@ -529,3 +529,14 @@ function furnishInn(b: MeshBuilder, m: THREE.Matrix4, rng: Rng, L: InnLayout, wa
   // A lantern glow under the ridge.
   b.box('glowWindow', m, 0, FLOOR_H * 2 + 0.6, 0, 0.25, 0.3, 0.25, { color: col('#ffffff') });
 }
+
+/** Where the innkeeper stands: behind the counter, facing the room (local coordinates). */
+export function innKeeperLocal(plan: { width: number; depth: number; chimney: BuildingPlan['chimney'] }): { x: number; z: number } {
+  const T = 0.3;
+  const side = plan.chimney === 'left' ? -1 : 1;
+  const W = plan.width;
+  const D = plan.depth;
+  const stairEnd = -side * (W / 2 - T - 0.25) + side * 7 * 0.42;
+  const cx = side * Math.min(W / 2 - T - 2.0, Math.max(0.9, Math.abs(stairEnd) + 1.6));
+  return { x: cx, z: -D / 2 + T + 0.96 };
+}

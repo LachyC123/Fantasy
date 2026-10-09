@@ -154,5 +154,41 @@
 "wait": 3000,
 "atlas": true,
 "zoomOut": 1
+},
+{
+"name": "17-inn-door",
+"at": "inn-door",
+"open": true,
+"dist": 5,
+"pitch": 0.05,
+"tod": "golden",
+"wait": 4000
+},
+{
+"name": "18-inn-taproom",
+"at": "villager",
+"trade": "innkeeper",
+"from": "inn-mid",
+"pitch": -0.05,
+"tod": "golden",
+"wait": 4000
+},
+{
+"name": "19-inn-loft",
+"at": "inn-inside",
+"loft": true,
+"tod": "golden",
+"pitch": -0.15,
+"wait": 3000
+},
+{
+"name": "20-villager",
+"at": "villager",
+"index": 2,
+"dist": 3.2,
+"angle": 0.6,
+"pitch": -0.02,
+"tod": "afternoon",
+"wait": 3000
 }
 ]

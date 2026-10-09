@@ -431,6 +431,7 @@ export class Game {
       explored: (x, z) => ex.explored(x, z),
       roads: w.index.cached.flatMap((a) => a.content.roads),
       sites: ex.discovered,
+      rumours: ex.rumoured,
       regions,
       heading: `${w.regionNameAt(p.x, p.z)} — the world of “${w.seed}”`,
       stats: `${ex.discovered.length} ${ex.discovered.length === 1 ? 'place' : 'places'} found · ${km < 1 ? `${Math.round(ex.travelled)} m` : `${km.toFixed(1)} km`} travelled`,
@@ -471,6 +472,11 @@ export class Game {
       for (const s of this.exploration.discovered) {
         const d = Math.hypot(s.x - p.x, s.z - p.z);
         if (d < 2500 && d > s.radius * 0.5) marks.push({ id: s.id, x: s.x, z: s.z, known: true, name: s.name, d });
+      }
+      // Places you have heard about: their direction, as far as the rumour goes.
+      for (const s of this.exploration.rumoured) {
+        const d = Math.hypot(s.x - p.x, s.z - p.z);
+        if (d < 3500) marks.push({ id: s.id, x: s.x, z: s.z, known: false, name: s.name, d: d * 0.5 });
       }
       for (const s of w.sites) {
         if (s.kind === 'crossroads' || this.exploration.isDiscovered(s.id)) continue;
@@ -758,6 +764,21 @@ export class Game {
         this.audio.click();
       },
     }));
+    for (const v of w.villagers.all) {
+      if (Math.abs(v.x - p.x) > 6 || Math.abs(v.z - p.z) > 6) continue;
+      targets.push({
+        position: v.headPosition,
+        label: `Talk to ${v.plan.name}`,
+        act: () => {
+          const r = w.rumourFor(v, (id) => this.exploration.isDiscovered(id));
+          v.talk(p.x, p.z);
+          this.ui.message(`${v.plan.name}, ${tradeName(v.plan.trade)} of ${v.plan.home}: ${r.line}`, 12);
+          if (r.site) this.exploration.hear(r.site);
+          this.audio.click();
+          g.state.interacted = true;
+        },
+      });
+    }
     for (const d of w.doors) {
       if (Math.abs(d.center.x - p.x) > 6 || Math.abs(d.center.z - p.z) > 6) continue;
       targets.push({
@@ -978,6 +999,8 @@ export class Game {
         return best;
       },
       regionPlan: (rx: number, rz: number) => this.world?.index.region(rx, rz),
+      villagers: () => this.world?.villagers.all.map((v) => ({ id: v.plan.id, name: v.plan.name, trade: v.plan.trade, pos: [v.x, v.y, v.z], head: v.headPosition.toArray() })) ?? [],
+      rumoured: () => this.exploration.rumoured.map((r) => ({ ...r })),
       doors: () => this.world?.doors.map((d) => ({ id: d.id, open: d.open, center: d.center.toArray(), yaw: d.doorway.yaw })) ?? [],
       toggleDoor: (id: string) => {
         const d = this.world?.doors.find((x) => x.id === id);
@@ -985,6 +1008,10 @@ export class Game {
       },
     };
   }
+}
+
+function tradeName(t: string): string {
+  return t === 'innkeeper' ? 'keeper of the inn' : t === 'priest' ? 'priest' : t;
 }
 
 const SEED_WORDS = ['amber', 'briar', 'cinder', 'dusk', 'elder', 'fallow', 'gloam', 'hollow', 'ivy', 'jade', 'kestrel', 'lantern', 'moss', 'nettle', 'oriel', 'pale', 'quill', 'rook', 'sable', 'thorn', 'umber', 'vesper', 'willow', 'yew'];

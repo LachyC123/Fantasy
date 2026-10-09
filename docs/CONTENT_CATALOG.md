@@ -28,6 +28,8 @@ Only content that **actually exists in the code** is listed. Everything is gener
 | Wayside shrines | A saint in a stone niche with candles; often an offering (lucky). Named e.g. *Shrine of the Weeping Maid* |
 | Abandoned camps | Tents round a cold fire, a woodpile and a traveller's chest. Named e.g. *Charcoal Burners' Camp* |
 | Crossroads | Where a village-less region gathers its roads, marked by a waystone |
+| Inn (enterable) | In every village and the vale's hamlet. A hinged door; a taproom with a hearth, a counter and barrels, tables and benches; a stair to a loft with beds and a guest's chest. A warm light while you're inside |
+| Villagers | An innkeeper (behind the counter), a priest (church porch), 2–4 street strollers in a village (2–3 in a hamlet), a farmer in most farmyards. Generated names, trades (smith, weaver, miller, carter, herbalist, cooper, shepherd), looks and walk/idle animation; they talk and pass on rumours |
 
 ## Roads
 
@@ -106,6 +108,9 @@ logs, mushrooms and stumps.
 ## Interactions (E)
 
 - Read signposts (they point at real places), examine waystones and shrines, look into wells.
+- Talk to villagers: a greeting and a rumour of a real undiscovered place nearby (direction,
+  walking distance, how the luck runs there); it is marked on the Atlas and compass.
+- Open and close inn doors.
 - Open a chest (its lid swings up and the weapon inside is revealed), then take it.
 - Take a weapon find (it swaps with the weapon in your hand). **I** shows the weapon card.
 - **M** opens the Hollow Atlas.
@@ -117,6 +122,6 @@ dirt and stone, sword whoosh, UI click.
 
 ## Not yet present (do not assume)
 
-NPCs; creatures in the world (they exist only in the gallery); combat hits (weapon stats are not
+NPC schedules, trade and quests; animals; creatures in the world (they exist only in the gallery); combat hits (weapon stats are not
 yet used); inventory beyond the weapon in hand; the Atlas's story entries (the map exists); saves;
 interiors; water and rivers; dungeons; quests.

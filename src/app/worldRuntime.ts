@@ -26,6 +26,10 @@ import { deriveSeed } from '../core/rng';
 import { LootSystem } from '../gameplay/loot';
 import { WorldIndex, WorldTerrain } from '../world/worldIndex';
 import { Door } from '../world/doors';
+import { VillagerSystem, type Villager } from '../world/villagerSystem';
+import { rumourLine, idleLine } from '../gameplay/villagers';
+import { compassWord } from '../world/regionPlan';
+import { hashInts } from '../core/rng';
 import { REGION, cellOf, inVale, VALE_BOUNDS } from '../world/regions';
 import type { Bounds } from '../world/types';
 
@@ -71,6 +75,9 @@ export class WorldRuntime {
   smoke!: ChimneySmoke;
   motes!: AmbientMotes;
   loot!: LootSystem;
+  villagers!: VillagerSystem;
+  /** Which place each villager has told the player about (by villager id). */
+  private readonly told = new Map<string, SitePlan>();
   validation!: ValidationReport;
   pool!: GenPool;
   private collidersVersion = -1;
@@ -119,6 +126,8 @@ export class WorldRuntime {
     await yieldFrame();
     this.loot = new LootSystem(this.terrain, this.materials);
     this.group.add(this.loot.group);
+    this.villagers = new VillagerSystem(this.materials, this.terrain);
+    this.group.add(this.villagers.group);
     this.smoke = new ChimneySmoke([]);
     this.group.add(this.smoke.pool.points);
     const spawn = new THREE.Vector3(this.plan.spawn.x, 0, this.plan.spawn.z);
@@ -224,6 +233,7 @@ export class WorldRuntime {
     s.group.name = `area ${id}`;
     this.group.add(s.group);
     this.loot.addArea(id, content.finds, content.props);
+    this.villagers.addArea(id, content);
     const doors = s.doors.map((d) => {
       const door = new Door(d.id, d.doorway, this.materials, this.collision);
       if (this.openDoors.has(d.id)) door.toggle();
@@ -256,6 +266,7 @@ export class WorldRuntime {
     this.collision.removeGroup(id);
     for (const d of a.doors) d.dispose();
     this.loot.removeArea(id);
+    this.villagers.removeArea(id);
     this.loaded.delete(id);
     this.interactableCache = null;
     this.smoke.setEmitters([...this.loaded.values()].flatMap((x) => x.smoke));
@@ -390,6 +401,38 @@ export class WorldRuntime {
     return [...this.loaded.values()].flatMap((a) => a.content.sites);
   }
 
+  /**
+   * What a villager tells you: a real place within about 3 km that you have not found yet,
+   * with its direction and distance. They keep to the same tale until you have seen it.
+   */
+  rumourFor(v: Villager, known: (id: string) => boolean): { line: string; site: SitePlan | null } {
+    const prev = this.told.get(v.plan.id);
+    if (prev && !known(prev.id)) return { line: this.lineFor(v, prev), site: prev };
+    const cands: { site: SitePlan; d: number; fortune: number }[] = [];
+    const add = (site: SitePlan, fortune: number): void => {
+      const d = Math.hypot(site.x - v.x, site.z - v.z);
+      if (d > 250 && d < 3000 && !known(site.id) && site.kind !== 'crossroads') cands.push({ site, d, fortune });
+    };
+    for (const s of this.plan.sites) add(s, 0.2);
+    for (const [rx, rz] of this.cellsWithin(v.x, v.z, 3000)) {
+      const sk = this.index.skeleton(rx, rz);
+      if (sk) for (const s of sk.sites) add({ id: s.id, kind: s.kind, name: s.name, x: s.x, z: s.z, radius: 30 }, sk.fortune);
+    }
+    if (!cands.length) return { line: idleLine(v.plan), site: null };
+    cands.sort((a, b) => a.d - b.d);
+    const pick = cands[hashInts(deriveSeed(v.plan.id, 'rumour'), this.told.size) % Math.min(4, cands.length)]!;
+    this.told.set(v.plan.id, pick.site);
+    this.fortunes.set(pick.site.id, pick.fortune);
+    return { line: this.lineFor(v, pick.site), site: pick.site };
+  }
+
+  private readonly fortunes = new Map<string, number>();
+
+  private lineFor(v: Villager, site: SitePlan): string {
+    const d = Math.hypot(site.x - v.x, site.z - v.z);
+    return rumourLine(v.plan, site, d, compassWord(site.x - v.x, site.z - v.z), this.fortunes.get(site.id) ?? 0);
+  }
+
   /** The name of the region at a point ("The Ashen Downs"). */
   regionNameAt(x: number, z: number): string {
     const rx = cellOf(x);
@@ -425,6 +468,7 @@ export class WorldRuntime {
     }
     this.continueBuild();
     for (const a of this.loaded.values()) for (const d of a.doors) d.update(dt);
+    this.villagers.update(dt, cam, cam);
     this.terrainStreamer.update(cam);
     this.vegetation.update(cam);
     this.syncTreeColliders();

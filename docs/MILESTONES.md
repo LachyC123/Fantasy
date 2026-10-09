@@ -6,7 +6,7 @@ The development plan from the brief (Section 60), tracked honestly. Status value
 | # | Milestone | Status |
 | --- | --- | --- |
 | 1 | Beautiful playable first valley | **complete**, awaiting review (see the acceptance table) |
-| 2 | Medieval village + castle approach | **in progress**: procedural villages with churches, inns, lanterns and cobbled streets exist; the enterable inn, residents and the town street of reference A remain |
+| 2 | Medieval village + castle approach | **largely done**: villages with churches, enterable inns (doorway, hinged door, taproom, stairs, loft), lanterns, cobbled streets and residents with walk and idle animation who talk and pass on rumours. Remaining: the dense town street of reference A and a castle gatehouse approach |
 | 3 | Deterministic procedural landscape | **in progress**: done ahead of order at the user's request — endless region grid, region road graph through gates, worker generation, 8 site archetypes, validation at region scale. Remaining: polished distinct biomes, rivers and lakes |
 | 4 | Hollow Atlas and discoveries | **in progress**: Atlas map with fog of war, discovery of every place, chests and the compass exist. Remaining: the altar pickup, survey viewpoints, notes, rumours, journal, saves |
 | 5 | Combat vertical slice | planned (sword swing animation only, no hit detection or enemies) |

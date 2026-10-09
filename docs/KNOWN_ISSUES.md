@@ -8,8 +8,8 @@ metres (press F3 to see your position).
 | # | Limitation | Planned |
 | --- | --- | --- |
 | L1 | No save/load. Continue and Load Journey are deliberately absent from the title menu, so there are no fake buttons. | M4 (IndexedDB) |
-| L2 | No interiors. Cottage doors are closed and have no prompt; the castle gate is shut (portcullis). | M2 (inn), later castle |
-| L3 | No NPCs or enemies in the world; generated creatures can only be viewed in the developer gallery. Swings have no hit detection, and weapon stats are not used yet. | M5, M7 |
+| L2 | Only inns are enterable. Other doors are closed and have no prompt; churches are closed; castle gates are shut (portcullis). | Later |
+| L3 | Villagers exist, but there are no schedules, trade or animals, and no enemies; generated creatures can only be viewed in the developer gallery. Swings have no hit detection, and weapon stats are not used yet. | M5, M7 |
 | L4 | The Atlas is a map only (no story entries, notes or rumours); no inventory or quests. Taken weapons, opened chests, explored ground and discoveries last for the journey only (no saves). | M4 |
 | L5 | No water (rivers or lakes) yet. | M3 |
 | L6 | ~~No sites beyond the vale.~~ The open world is procedural and endless. Remaining: distinct biomes (fen, marches, …) and water. | M3 |
@@ -37,4 +37,6 @@ metres (press F3 to see your position).
 | I14 | Region builds cost 30–90 ms of CPU, spread over several frames at 4 ms per frame. Castle landmarks (about 20–60 ms each) are built in one go. | F3 overlay | Time-slicing castles is a follow-up. |
 | I15 | Villages have no NPCs yet, and church and inn doors are closed (no interiors). | Visit a village | M2 (enterable inn) and M7 (residents). |
 | I16 | Roads can climb steeply where a region has no gentle way to its gate (grade-limited to 18% for trade roads, with cuttings). | Mountain regions | Validation keeps every road within its grade limit. |
+| I17 | Villagers have no collider: you can walk through them (they stop when you are in their way). | Walk into a villager | Moving colliders for NPCs come with M5's combat collision work. |
+| I18 | Without shadows (the phone preset), sunlight is not blocked indoors; interiors look brighter than intended. | Settings → Shadows off, enter an inn | The warm interior light still applies. |
 | I8 | Validation issues for unusual seeds are logged and shown in F3 but not shown to players. | – | Validation passes for 40/40 sampled seeds. A failing seed should be added to the test list. |

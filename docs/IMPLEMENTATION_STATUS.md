@@ -3,7 +3,7 @@
 What actually works today, what is a prototype and what is only planned. Every number below
 comes from a run in the development container. Nothing here is estimated or invented.
 
-**Build:** 0.4.0 (Milestone 1, the procedural arsenal and bestiary, touch play on phones, and the open procedural world).
+**Build:** 0.5.0 (Milestone 1, the procedural arsenal and bestiary, touch play on phones, the open procedural world, and living villages with enterable inns).
 **Reference seed:** `reference-valley`.
 **Generator version:** 1.
 
@@ -20,6 +20,9 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Region streaming (worker planning, time-sliced building, per-region colliders and finds, castle landmarks) | **implemented** | browser-tested |
 | Discovery banners, region names, the Hollow Atlas map (fog of war), compass | **implemented** | journey-only (no saves) |
 | Chests (open, reveal, take) | **implemented** | journey-only |
+| Enterable inns (doorway, hinged door, taproom, stairs, loft, interior light) | **implemented** | unit-tested walk-in and stair climb; browser-tested door |
+| Villagers (innkeeper, priest, strollers, farmers; looks; walk/idle animation) | **implemented** | no collider, schedules or trade yet |
+| Talk and rumours of real undiscovered places (Atlas and compass marks) | **implemented** | unit- and browser-tested |
 | Spatial validation (pads, overlaps, roads, doors, spawn, fields, fences, finds, junction heights, area bounds) | **implemented** | 40/40 vales and every tested region pass |
 | Terrain streaming (quadtree LOD, skirts, painterly colouring) | **implemented** | the seam test passes |
 | Vegetation streaming (7 species × 3 variants × 3 LODs, ground cover, grass, crops) | **implemented** | |
@@ -38,7 +41,7 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Procedural creatures (8 body plans, 16 mutations, 4 tiers, carried weapons) | **prototype** | generator and meshes only, shown in `?gallery`; not in the world, no AI or animation |
 | Developer gallery (`?gallery`) | **implemented** | developer tool |
 | Phones and tablets (touch controls, lighter preset, mobile metadata) | **implemented** | tested in Chromium phone emulation; not yet tried on a real device |
-| Interiors, NPCs, dialogue, trade | **planned** | M2, M7 |
+| Other interiors (houses, churches, castles), NPC schedules, dialogue trees, trade, animals | **planned** | M7 and later |
 | Atlas story entries, notes, survey viewpoints, inventory, quests | **planned** | M4 |
 | Combat (hit detection, block, dodge, enemies in the world) | **planned** | M5 |
 | Dungeons, caves, crypts | **planned** | M6 |
@@ -50,22 +53,23 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Suite | Command | Result |
 | --- | --- | --- |
 | Typecheck and build | `npm run build` | clean |
-| Unit and generation tests | `npm test` | **59 / 59 passed** (7 files) |
+| Unit and generation tests | `npm test` | **68 / 68 passed** (9 files; the streaming benchmark runs last, on its own) |
 | World validation sweep | `npx vite-node scripts/validate.ts -- 40` | **40 / 40 seeds valid** |
-| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **8 / 8 passed** in 9.4 min |
+| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **9 / 9 passed** (8 in the full 9.6 min run; the journey test's walk check was then made frame-rate independent and passed on rerun) |
 
-Browser test durations:
+Browser test durations (latest full run):
 
 | Test | Time |
 | --- | --- |
-| Gallery | 25 s |
-| Phone (touch controls) | 1.3 min |
-| Open world (village, Atlas, chest) | 1.1 min |
-| Title and menus | 1.1 min |
-| Journey | 1.2 min |
-| Wall collision | 22 s |
-| Worker scripts blocked (fallback) | 23 s |
-| Streaming travel | 3.5 min |
+| Gallery | ≈ 25 s |
+| Phone (touch controls) | ≈ 1.3 min |
+| Open world (village, Atlas, chest) | ≈ 1.1 min |
+| Village life (rumour, Atlas, inn door) | ≈ 35 s |
+| Title and menus | ≈ 1.1 min |
+| Journey (rerun after the fix) | 49 s |
+| Wall collision | ≈ 22 s |
+| Worker scripts blocked (fallback) | ≈ 23 s |
+| Streaming travel | ≈ 3.5 min |
 
 During the streaming travel test the geometry count went from 350 to 707 (bounded), with 27,710
 trees and 1,425 vegetation chunks loaded. No errors were reported.
@@ -110,6 +114,10 @@ All screenshots are real captures from the production build at 1280×720, made w
 | `14-standing-stones.png` | A ring of standing stones on a hill |
 | `15-camp.png` | An abandoned camp with tents and a traveller's chest |
 | `16-atlas.png` | The Hollow Atlas after visiting four places (fog of war, places list) |
+| `17-inn-door.png` | The vale hamlet's inn with its door open |
+| `18-inn-taproom.png` | Inside the taproom: hearth, counter and the innkeeper turning to greet you |
+| `19-inn-loft.png` | The loft: beds, the chimney stack, the roof timbers |
+| `20-villager.png` | A villager strolling the hamlet's cobbled street towards the castle |
 
 In shots 09 and 10 the castle's arrival banner is still on screen. It is the real banner, which
 lasts 5 seconds of game time; at software-rendering frame rates it outlasts the capture wait.
@@ -128,9 +136,9 @@ lasts 5 seconds of game time; at software-rendering frame rates it outlasts the 
 | 8. Ruined watchtower by road; chest, note, item, survey | ⚠️ **partial**: towers are reachable and climbable, with a weapon or a strongbox; chests open; there is no note or survey yet (M4) |
 | 9. Atlas | ⚠️ **partial**: the Atlas map shows explored land and every discovered place; story entries are M4 |
 | 10. Creature encounter and combat | ⏳ pending (M5); creatures exist only in the gallery |
-| 11. Living hamlet with smoke, an animal and named NPCs | ⚠️ **partial**: varied houses, smoke and birds; no NPCs or animals yet (M2, M7) |
-| 12. NPC conversation, rumour, trade | ⏳ pending (M7) |
-| 13. Enterable cottage or inn | ⏳ pending (M2) |
+| 11. Living hamlet with smoke, an animal and named NPCs | ⚠️ **partial**: varied houses, smoke, birds and named villagers with walk/idle animation; no animals yet (M7) |
+| 12. NPC conversation, rumour, trade | ⚠️ **partial**: talk to villagers for geographically valid rumours (real places, direction, walking distance) that mark the Atlas; no trade yet (M7) |
+| 13. Enterable cottage or inn | ✅ inns: doorway with a hinged door, taproom, stairs to a loft, working collisions (unit- and browser-tested) |
 | 14. Cobbled street towards enormous Gothic towers (reference A) | ⚠️ **partial**: the hamlet street is cobbled and frames the spires (`03-hamlet-street-castle.png`); the dense town street is M2 |
 | 15. Side ruin, cave or crypt with rooms and a secret | ⏳ pending (M6) |
 | 16. Reward, puzzle or quest, Atlas update | ⚠️ **partial**: rewards (finds, chests) and Atlas updates on discovery; puzzles and quests are M4/M9 |

@@ -30,7 +30,8 @@ The full brief is in [BRIEF.md](BRIEF.md). This file states the design as it app
   - The world is an endless grid of procedural regions, each different for every seed.
   - Roads branch through gates in every direction, and signposts name real destinations.
   - About a third of the minor places sit off every road, for people who wander.
-  - The compass hints at undiscovered places only when you are close.
+  - The compass hints at undiscovered places only when you are close, or when a villager has told
+    you about one. Rumours name real places with their direction and walking distance.
   - Luck varies by region (its fortune) and by place: stone rings and camps roll wildly, castle
     gates generously, and a cottager's chopping block is humble.
 - **Expedition (Milestones 4–7):** set out from a safe place → follow a rumour or a vista → find
@@ -49,8 +50,8 @@ The full brief is in [BRIEF.md](BRIEF.md). This file states the design as it app
 | Atlas on a stone altar | Planned (Milestone 4) |
 | Watchtower with chest, torch and note; survey viewpoint | The ruin exists and can be entered and climbed via a broken stair. Chest, items and survey are planned (Milestone 4). |
 | Briarling encounter | Planned (Milestone 5) |
-| Farm, inhabited cottage, smoke, travelling NPC, rumour | Farm, cottages and smoke are implemented. NPCs and rumours are planned (Milestone 7). |
-| Village gate, castle framed by roofs | The hamlet and the cobbled street towards the castle exist. Gate and street dressing are planned (Milestone 2). |
+| Farm, inhabited cottage, smoke, travelling NPC, rumour | Farms, cottages, smoke, villagers and rumours are implemented. A travelling NPC is planned (Milestone 7). |
+| Village gate, castle framed by roofs | The hamlet, villages with churches, inns and lanterns, and the cobbled street towards the castle exist. A town gate and the dense street of reference A are planned. |
 
 ## Content rules
 

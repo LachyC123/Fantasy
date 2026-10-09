@@ -13,7 +13,7 @@ npm run build         # typecheck + Vite production build
 ## 2. Unit and generation tests (Vitest, Node, no browser)
 
 ```bash
-npm test
+npm test     # all unit tests, then the streaming benchmark on its own (so parallel load cannot skew it)
 ```
 
 | File | What it proves |
@@ -24,6 +24,8 @@ npm test
 | `tests/creatures.test.ts` | Creatures are deterministic; tier odds, including a rare mythic tail; danger scales with tier; champions are named; 4,000 of 4,000 forms are distinct; biome and plan constraints hold; only armed plans carry weapons; finite meshes for every plan and tier |
 | `tests/streaming.test.ts` | **Streaming benchmark.** The real terrain and vegetation streamers walk the footpath and the whole Vale Road (328 steps of 6 m, far faster than a player moves). Generation runs inline and is excluded from the timing; in the browser it runs in workers. It asserts main-thread cost per step (replans, uploads, batch rebuilds) of p95 < 12 ms and max < 40 ms (headroom for CPU contention when test files run in parallel). The last run measured p50 3.1 ms, p95 7.2 ms, max 15.8 ms. |
 | `tests/openworld.test.ts` | **Open world:**<ul><li>a region plans identically whatever order regions are generated in;</li><li>regions differ between seeds and positions;</li><li>neighbours agree on every border gate (same id, position and opposite normal);</li><li>every gate has a road, and the neighbour's road through it starts at the same point and height;</li><li>spatial validation passes for 32 regions across 3 seeds, with every site kind present;</li><li>region planning median is under 60 ms;</li><li>the vale has ≥ 3 exit roads starting exactly at its gates, and side places;</li><li>terrain is continuous across region borders;</li><li>distant (skeleton) terrain stays within 12 m of the planned surface;</li><li>no trees grow on procedural roads or buildings;</li><li>A* routes go around a hill rather than over it.</li></ul> |
+| `tests/interior.test.ts` | The inn: present in the vale hamlet and in procedural villages (with a church); walking in through the doorway puts you inside on its floor; the stair climbs to the loft (> 2.5 m); walls stay solid from inside; the loft chest sits on its floor |
+| `tests/villagers.test.ts` | Villagers are planned deterministically with unique ids; the innkeeper stands inside the inn at floor level; street routes never pass through buildings and stay on the road; rumour lines name the place, direction, walking distance and luck |
 | `tests/controller.test.ts` | Box push-out; walk and sprint speeds; yaw-relative movement; walls block and the player slides along them; step-up onto 0.4 m stones but not 1.1 m blocks; jumping and landing; the steep-slope limit (gentle slopes stay climbable); the reference spawn is grounded and the footpath walkable |
 
 Wider seed sweep (also builds every collider):
@@ -52,6 +54,7 @@ the intro and pointer lock and keeps the canvas readable.
 | `e2e/smoke.spec.ts`: worker fallback | With the worker script blocked, the world still loads on the main thread (0 workers, terrain and trees present) without errors |
 | `e2e/mobile.spec.ts` | A landscape phone (844×390, touch only, detected rather than forced): the phone quality preset; tap through the menus; the thumbstick walks; a drag turns the view; Jump, Swing, Use (at the signpost), Weapon card and Pause buttons work; Resume returns to play; no errors |
 | `e2e/openworld.spec.ts` | **Open world in the browser:**<ul><li>teleport to a procedural village two regions east;</li><li>the region streams in (worker plan, time-sliced build) and the village is discovered (banner);</li><li>**M** opens the Atlas, which lists the village; zoom; **M** closes it;</li><li>at a camp, the chest prompt reads *Open chest*; **E** opens it and shows the weapon card, then *Take* swaps the weapon;</li><li>no errors.</li></ul> |
+| `e2e/openworld.spec.ts`: village life | Talk to a hamlet villager: the message quotes a rumour naming a real planned place more than 200 m away; it is listed on the Atlas as a rumour; the inn door opens with **E** |
 | `e2e/streaming.spec.ts` | Autopilot walks the footpath and the first 30% of the Vale Road while the workers stream the world. It asserts the vegetation loads, the geometry count stays bounded, the final frame is not blank and there are no errors. It checks correctness only, because headless rendering runs below 1 FPS. |
 
 ## 4. Visual review

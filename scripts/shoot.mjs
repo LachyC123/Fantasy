@@ -66,6 +66,21 @@ for (const v of views) {
       }
       return null;
     }
+    // A villager, framed from a few metres away.
+    if (v.at === 'villager') {
+      const list = h.villagers().filter((x) => !v.trade || x.trade === v.trade);
+      const vil = list[v.index ?? 0];
+      if (!vil) return null;
+      const a = v.angle ?? 0;
+      if (v.from === 'inn-mid') {
+        // From the middle of the inn's taproom.
+        const inn = p.buildings.find((b) => b.kind === 'inn');
+        h.teleport(inn.x + Math.sin(inn.yaw) * 1.5, inn.z + Math.cos(inn.yaw) * 1.5, undefined, undefined, inn.padHeight + 0.06);
+      } else h.teleport(vil.pos[0] + Math.sin(a) * (v.dist ?? 3), vil.pos[2] + Math.cos(a) * (v.dist ?? 3), undefined, undefined, v.y !== undefined ? vil.pos[1] + v.y : undefined);
+      const pl = h.player();
+      h.look(Math.atan2(-(vil.pos[0] - pl.x), -(vil.pos[2] - pl.z)), v.pitch ?? -0.05);
+      return null;
+    }
     // Procedural places beyond the vale: found from the seed, then framed.
     if (v.at === 'site' || v.at === 'street') {
       const s = h.nearestSite(v.kind, v.from?.[0] ?? 0, v.from?.[1] ?? 0);

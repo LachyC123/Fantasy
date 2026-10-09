@@ -60,3 +60,46 @@ test('open world: travel to a procedural village, discover it, read the Atlas, o
   expect(errors).toEqual([]);
   expect(await api<string[]>(page, 'errorList')).toEqual([]);
 });
+
+test('village life: a villager tells of a real place, the Atlas marks it, the inn door opens', async ({ page }) => {
+  const errors = await openGame(page);
+  await beginJourney(page);
+  // The vale's hamlet is always built at the start.
+  const v = await page.evaluate(() => (window as any).__hollowAtlas.villagers().find((x: { trade: string }) => x.trade !== 'innkeeper' && x.trade !== 'priest'));
+  expect(v).toBeDefined();
+  await page.evaluate((vil) => {
+    const h = (window as any).__hollowAtlas;
+    h.teleport(vil.pos[0] + 1.8, vil.pos[2] + 0.4);
+    const p = h.player();
+    h.look(Math.atan2(-(vil.head[0] - p.x), -(vil.head[2] - p.z)), Math.atan2(vil.head[1] - (p.y + 1.62), Math.hypot(vil.head[0] - p.x, vil.head[2] - p.z)));
+  }, v);
+  await expect(page.locator('#hud .prompt')).toContainText('Talk to', { timeout: 30_000 });
+  await page.keyboard.press('KeyE');
+  await expect(page.locator('#hud .message')).toContainText('“', { timeout: 15_000 });
+  const rumoured = await api<{ name: string; x: number; z: number }[]>(page, 'rumoured');
+  expect(rumoured.length).toBe(1);
+  // The rumour names a real, planned place at least 250 m away.
+  const p = await api<{ x: number; z: number }>(page, 'player');
+  expect(Math.hypot(rumoured[0]!.x - p.x, rumoured[0]!.z - p.z)).toBeGreaterThan(200);
+  await expect(page.locator('#hud .message')).toContainText(rumoured[0]!.name.replace(/^the /, ''));
+  await page.keyboard.press('KeyM');
+  await expect(page.locator('#atlas .atlas-places')).toContainText('Rumour');
+  await page.keyboard.press('KeyM');
+
+  // The inn door: open it from outside.
+  const door = await page.evaluate(() => (window as any).__hollowAtlas.doors()[0]);
+  expect(door).toBeDefined();
+  await page.evaluate((d) => {
+    const h = (window as any).__hollowAtlas;
+    const out = { x: Math.sin(d.yaw), z: Math.cos(d.yaw) };
+    h.teleport(d.center[0] + out.x * 2, d.center[2] + out.z * 2);
+    const p = h.player();
+    h.look(Math.atan2(-(d.center[0] - p.x), -(d.center[2] - p.z)), -0.1);
+  }, door);
+  await expect(page.locator('#hud .prompt')).toContainText('Open door', { timeout: 30_000 });
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction((id) => (window as any).__hollowAtlas.doors().find((d: { id: string }) => d.id === id).open, door.id, { timeout: 15_000 });
+
+  expect(errors).toEqual([]);
+  expect(await api<string[]>(page, 'errorList')).toEqual([]);
+});

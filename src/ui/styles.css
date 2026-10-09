@@ -1044,3 +1044,8 @@ body.touch #hud .compass {
 body.touch #hud .compass {
   top: calc(env(safe-area-inset-top, 0px) + 58px);
 }
+
+.atlas-rumour {
+  font-style: italic;
+  color: #7a281e;
+}

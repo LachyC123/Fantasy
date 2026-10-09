@@ -11,6 +11,8 @@ const key = (cx: number, cz: number): number => (cx + 32768) * 65536 + (cz + 327
 export class Exploration {
   private readonly cells = new Set<number>();
   readonly discovered: SitePlan[] = [];
+  /** Places you have heard of but not yet found. */
+  readonly rumoured: SitePlan[] = [];
   private lastX = Infinity;
   private lastZ = Infinity;
   /** Metres travelled (horizontal), for the Atlas. */
@@ -38,9 +40,16 @@ export class Exploration {
     return this.cells.has(key(Math.floor(x / CELL), Math.floor(z / CELL)));
   }
 
+  hear(site: SitePlan): void {
+    if (this.isDiscovered(site.id) || this.rumoured.some((s) => s.id === site.id)) return;
+    this.rumoured.push(site);
+  }
+
   discover(site: SitePlan): void {
     if (this.discovered.some((s) => s.id === site.id)) return;
     this.discovered.push(site);
+    const ri = this.rumoured.findIndex((s) => s.id === site.id);
+    if (ri >= 0) this.rumoured.splice(ri, 1);
     // Seeing a place lifts the fog around it a little.
     const r = Math.ceil(Math.max(90, site.radius) / CELL);
     const cx = Math.floor(site.x / CELL);

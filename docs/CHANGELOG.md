@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.5.0: Villages come alive (Milestone 2 progress)
+
+**Added**
+- Enterable inns, in every procedural village and in the vale's hamlet:
+  - real walls with a doorway, and a hinged door that swings inward (**E**: Open / Close door);
+  - a taproom with a hearth, a counter with barrels, tables and benches;
+  - a stair to a loft with beds, a railed stair well, and a guest's chest;
+  - a warm interior light while you're inside.
+- Villagers:
+  - an innkeeper behind the counter, a priest at the church porch, residents strolling the
+    streets, farmers in their yards;
+  - generated names, trades and looks (height, build, colours, hats, aprons, beards);
+  - walk and idle animation; they turn to face you, and stop rather than walk into you.
+- **Talk** (**E**): villagers greet you and pass on a rumour of a real place within about 3 km
+  that you haven't found yet, with its direction, a distance in walking time, and how the luck
+  runs there. Rumoured places appear on the Atlas (dashed ring, "?") and as hollow marks on the
+  compass until you find them.
+- Tests:
+  - unit tests for the interior (walk in through the doorway, climb to the loft, solid walls) and
+    for villagers (deterministic plans, the innkeeper inside the inn, routes on streets, rumour
+    wording);
+  - a browser test of village life (rumour → Atlas → open the inn door).
+
+**Changed**
+- No grass grows through floors.
+- `npm test` runs the streaming benchmark on its own after the other test files, so parallel
+  load cannot disturb its timing.
+
 ## 0.4.0: An open, procedural world to explore
 
 **Added**

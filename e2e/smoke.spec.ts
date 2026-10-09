@@ -32,8 +32,12 @@ test('new journey: walk, jump, swing, read a sign, pause and resume', async ({ p
   expect(start.onGround).toBe(true);
 
   // Walk forward with the real keyboard.
+  // Hold W until the player has walked (software rendering runs at a few frames a second).
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(2500);
+  await page.waitForFunction((s0) => {
+    const p = (window as any).__hollowAtlas.player();
+    return Math.hypot(p.x - s0.x, p.z - s0.z) > 1.2;
+  }, start, { timeout: 60_000, polling: 250 });
   await page.keyboard.up('KeyW');
   const moved = await api<{ x: number; z: number; onGround: boolean }>(page, 'player');
   expect(Math.hypot(moved.x - start.x, moved.z - start.z)).toBeGreaterThan(1);

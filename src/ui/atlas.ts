@@ -17,6 +17,8 @@ export interface AtlasView {
   explored: (x: number, z: number) => boolean;
   roads: RoadPlan[];
   sites: SitePlan[];
+  /** Places heard of but not found: shown where the rumour puts them. */
+  rumours: SitePlan[];
   regions: { name: string; x: number; z: number }[];
   heading: string;
   stats: string;
@@ -227,6 +229,23 @@ export class Atlas {
       ctx.fillText(s.name, sx, sy - 10);
     }
 
+    // Rumoured places: a question mark where you were told to look.
+    ctx.font = `italic ${Math.max(11, Math.round(W / 46))}px 'IM Fell English', Georgia, serif`;
+    for (const s of v.rumours) {
+      const sx = toX(s.x);
+      const sy = toY(s.z);
+      if (sx < -20 || sy < -20 || sx > W + 20 || sy > W + 20) continue;
+      ctx.strokeStyle = 'rgba(122, 40, 30, 0.75)';
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(122, 40, 30, 0.9)';
+      ctx.fillText('?', sx, sy + 4);
+      ctx.fillText(`${s.name} (rumoured)`, sx, sy - 13);
+    }
+
     // You are here.
     ctx.save();
     ctx.translate(toX(v.x), toY(v.z));
@@ -262,13 +281,13 @@ export class Atlas {
 
     this.title.textContent = v.heading;
     this.stats.textContent = v.stats;
-    this.list.innerHTML = v.sites.length
-      ? v.sites
-          .slice()
-          .reverse()
-          .map((s) => `<li><span class="atlas-kind">${KIND_NAME[s.kind]}</span> ${escapeHtml(s.name)}</li>`)
-          .join('')
-      : '<li class="atlas-empty">Nothing found yet. Wander off the road.</li>';
+    const found = v.sites
+      .slice()
+      .reverse()
+      .map((s) => `<li><span class="atlas-kind">${KIND_NAME[s.kind] ?? s.kind}</span> ${escapeHtml(s.name)}</li>`)
+      .join('');
+    const heard = v.rumours.map((s) => `<li class="atlas-rumour"><span class="atlas-kind">Rumour</span> ${escapeHtml(s.name)}</li>`).join('');
+    this.list.innerHTML = found || heard ? heard + found : '<li class="atlas-empty">Nothing found yet. Wander off the road, or ask the locals.</li>';
   }
 }
 
