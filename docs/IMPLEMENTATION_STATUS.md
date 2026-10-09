@@ -53,25 +53,26 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Suite | Command | Result |
 | --- | --- | --- |
 | Typecheck and build | `npm run build` | clean |
-| Unit and generation tests | `npm test` | **68 / 68 passed** (9 files; the streaming benchmark runs last, on its own) |
+| Unit and generation tests | `npm test` | **68 / 68 passed** (9 files; the streaming benchmark runs last, on its own: p50 3.0 ms, p95 6.9 ms, max 11.4 ms) |
 | World validation sweep | `npx vite-node scripts/validate.ts -- 40` | **40 / 40 seeds valid** |
-| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **9 / 9 passed** (8 in the full 9.6 min run; the journey test's walk check was then made frame-rate independent and passed on rerun) |
+| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **10 / 10 passed** in 10.7 min |
 
 Browser test durations (latest full run):
 
 | Test | Time |
 | --- | --- |
-| Gallery | ≈ 25 s |
-| Phone (touch controls) | ≈ 1.3 min |
-| Open world (village, Atlas, chest) | ≈ 1.1 min |
-| Village life (rumour, Atlas, inn door) | ≈ 35 s |
-| Title and menus | ≈ 1.1 min |
-| Journey (rerun after the fix) | 49 s |
-| Wall collision | ≈ 22 s |
-| Worker scripts blocked (fallback) | ≈ 23 s |
-| Streaming travel | ≈ 3.5 min |
+| Gallery | 24 s |
+| Phone (touch controls) | 1.2 min |
+| Open world (village, Atlas, chest) | 56 s |
+| Village life (rumour, Atlas, inn door) | 52 s |
+| Saves (reload and continue) | 57 s |
+| Title and menus | 1.1 min |
+| Journey | 1.1 min |
+| Wall collision | 22 s |
+| Worker scripts blocked (fallback) | 21 s |
+| Streaming travel | 3.4 min |
 
-During the streaming travel test the geometry count went from 350 to 707 (bounded), with 27,710
+During the streaming travel test the geometry count went from 339 to 730 (bounded), with 27,696
 trees and 1,425 vegetation chunks loaded. No errors were reported.
 
 An earlier version of the streaming browser test walked the whole road and timed out after 8 minutes, because
