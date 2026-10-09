@@ -52,8 +52,8 @@ export interface BuildingPlan {
   /** Height of the ground floor surface. */
   padHeight: number;
   seed: number;
-  /** Interiors arrive in Milestone 2; nothing here pretends to be enterable. */
-  enterable: false;
+  /** Enterable buildings (inns) have a real doorway, interior and stairs; others are closed. */
+  enterable: boolean;
   settlementId: string;
   /** Lived-in buildings emit chimney smoke. */
   inhabited: boolean;
@@ -230,6 +230,10 @@ export interface WeaponFind {
   seed: number;
   /** Luck bias for the rarity/condition roll (negative = humble places). */
   luck: number;
+  /** Indoors: which building, and how far above its floor pad (final height is set in `y`). */
+  level?: { building: string; height: number };
+  /** Absolute height for finds indoors (upstairs); otherwise they rest on the ground. */
+  y?: number;
   cls?: 'axe' | 'spear';
   /** A line describing how it was left there. */
   story: string;
@@ -265,4 +269,8 @@ export interface PropPlan {
   scale?: number;
   /** What the player reads when examining it. */
   text?: string;
+  /** Indoors: which building, and how far above its floor pad (final height is set in `y`). */
+  level?: { building: string; height: number };
+  /** Absolute height for props indoors; otherwise they stand on the ground. */
+  y?: number;
 }

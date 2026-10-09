@@ -69,6 +69,9 @@ export class Game {
   /** The weapon in hand (procedurally generated). */
   weapon: WeaponGenome | null = null;
   private readonly sun = new THREE.DirectionalLight();
+  /** Warm hearth-and-lamp light, lit only while the player is indoors. */
+  private readonly interiorLight = new THREE.PointLight('#ffb36b', 0, 16, 1);
+  private indoors = 0;
   private readonly hemi = new THREE.HemisphereLight();
   private readonly sky = createSky();
   private preset: LightingPreset;
@@ -137,7 +140,7 @@ export class Game {
     this.atlas.onClose = () => this.closeAtlas();
     this.atlas.onZoom = () => this.drawAtlas();
 
-    this.scene.add(this.sky, this.sun, this.sun.target, this.hemi);
+    this.scene.add(this.sky, this.sun, this.sun.target, this.hemi, this.interiorLight);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
@@ -434,6 +437,28 @@ export class Game {
     });
   }
 
+  /** Inside an enterable building, its rooms glow with a warm light (one shared light). */
+  private updateInterior(dt: number, x: number, y: number, z: number): void {
+    const w = this.world!;
+    let inside: { x: number; z: number; pad: number } | null = null;
+    for (const c of w.contentsNear(x, z))
+      for (const b of c.buildings) {
+        if (!b.enterable || Math.abs(b.x - x) > 12 || Math.abs(b.z - z) > 12) continue;
+        const dx = x - b.x;
+        const dz = z - b.z;
+        const lx = Math.cos(b.yaw) * dx - Math.sin(b.yaw) * dz;
+        const lz = Math.sin(b.yaw) * dx + Math.cos(b.yaw) * dz;
+        if (Math.abs(lx) < b.width / 2 && Math.abs(lz) < b.depth / 2 + 0.6) inside = { x: b.x, z: b.z, pad: b.padHeight };
+      }
+    const target = inside ? 1 : 0;
+    this.indoors += (target - this.indoors) * Math.min(1, dt * 3);
+    if (inside) {
+      const loft = y - inside.pad > 2;
+      this.interiorLight.position.set(inside.x, inside.pad + (loft ? 2.85 + 1.9 : 2.2), inside.z);
+    }
+    this.interiorLight.intensity = 6 * this.indoors;
+  }
+
   /** Compass marks: places you know, and the faint pull of nearby places you do not. */
   private updateCompass(dt: number): void {
     const w = this.world;
@@ -711,6 +736,7 @@ export class Game {
       g.state.swung = true;
     }
     g.update(dt, p.x, p.z);
+    this.updateInterior(dt, p.x, p.y, p.z);
     this.exploration.visit(p.x, p.z);
     this.updateCompass(dt);
 
@@ -732,6 +758,18 @@ export class Game {
         this.audio.click();
       },
     }));
+    for (const d of w.doors) {
+      if (Math.abs(d.center.x - p.x) > 6 || Math.abs(d.center.z - p.z) > 6) continue;
+      targets.push({
+        position: d.center,
+        label: d.open ? 'Close door' : 'Open door',
+        act: () => {
+          w.toggleDoor(d);
+          this.audio.click();
+          g.state.interacted = true;
+        },
+      });
+    }
     for (const f of w.loot.finds) {
       if (Math.abs(f.anchor.x - p.x) > 6 || Math.abs(f.anchor.z - p.z) > 6) continue;
       if (w.loot.isClosedChest(f.find.id)) {
@@ -843,8 +881,8 @@ export class Game {
       ready: () => this.world !== null,
       plan: () => this.world?.plan,
       player: () => (this.player ? { x: this.player.x, y: this.player.y, z: this.player.z, yaw: this.yaw, pitch: this.pitch, onGround: this.player.onGround } : null),
-      teleport: (x: number, z: number, yaw?: number, pitch?: number) => {
-        this.player?.teleport(x, z);
+      teleport: (x: number, z: number, yaw?: number, pitch?: number, y?: number) => {
+        this.player?.teleport(x, z, y);
         if (yaw !== undefined) this.yaw = yaw;
         if (pitch !== undefined) this.pitch = pitch;
       },
@@ -940,6 +978,11 @@ export class Game {
         return best;
       },
       regionPlan: (rx: number, rz: number) => this.world?.index.region(rx, rz),
+      doors: () => this.world?.doors.map((d) => ({ id: d.id, open: d.open, center: d.center.toArray(), yaw: d.doorway.yaw })) ?? [],
+      toggleDoor: (id: string) => {
+        const d = this.world?.doors.find((x) => x.id === id);
+        if (d) this.world!.toggleDoor(d);
+      },
     };
   }
 }

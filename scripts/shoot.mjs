@@ -47,6 +47,25 @@ for (const v of views) {
       h.look(Math.atan2(b.x - x, b.z - z) + Math.PI, v.pitch ?? 0.05);
       x = undefined;
     }
+    // The vale inn: from outside its open door, or inside its taproom.
+    if (v.at === 'inn-door' || v.at === 'inn-inside') {
+      const inn = p.buildings.find((b) => b.kind === 'inn');
+      const d = h.doors().find((x) => x.id.startsWith(inn.id));
+      if (v.open && !d.open) h.toggleDoor(d.id);
+      const out = { x: Math.sin(inn.yaw), z: Math.cos(inn.yaw) };
+      if (v.at === 'inn-door') {
+        h.teleport(d.center[0] + out.x * (v.dist ?? 4), d.center[2] + out.z * (v.dist ?? 4));
+        h.look(Math.atan2(out.x, out.z) + (v.yawOffset ?? 0), v.pitch ?? 0);
+      } else {
+        const side = inn.chimney === 'left' ? -1 : 1;
+        const lx = -side * (inn.width / 2 - 2.2);
+        const lz = inn.depth / 2 - 1.2;
+        h.teleport(inn.x + Math.cos(inn.yaw) * lx + Math.sin(inn.yaw) * lz, inn.z - Math.sin(inn.yaw) * lx + Math.cos(inn.yaw) * lz, undefined, undefined, inn.padHeight + (v.loft ? 2.9 : 0.05));
+        const pl = h.player();
+        h.look(Math.atan2(-(inn.x - pl.x), -(inn.z - pl.z)) + (v.yawOffset ?? 0), v.pitch ?? -0.05);
+      }
+      return null;
+    }
     // Procedural places beyond the vale: found from the seed, then framed.
     if (v.at === 'site' || v.at === 'street') {
       const s = h.nearestSite(v.kind, v.from?.[0] ?? 0, v.from?.[1] ?? 0);

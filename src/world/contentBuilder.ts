@@ -343,7 +343,7 @@ export class ContentBuilder {
       chimney: civic || isBarn ? 'none' : rng.chance(0.5) ? 'left' : 'right',
       padHeight: 0,
       seed: rng.int(0, 2 ** 31),
-      enterable: false,
+      enterable: kind === 'inn',
       settlementId,
       inhabited: !isBarn && !civic && rng.chance(0.85),
     };
@@ -421,6 +421,13 @@ export class ContentBuilder {
     const t = this.terrain;
     for (const b of this.c.buildings) b.padHeight = this.seatHeight(buildingObb(b));
     for (const r of this.c.ruins) r.padHeight = t.heightBeforeBuildings(r.x, r.z) + 0.05;
+    // Things indoors stand on their building's (now final) floors.
+    const byId = new Map(this.c.buildings.map((b) => [b.id, b] as const));
+    for (const o of [...this.c.props, ...this.c.finds]) {
+      if (!o.level) continue;
+      const b = byId.get(o.level.building);
+      if (b) o.y = b.padHeight + o.level.height;
+    }
     const pads: Pad[] = [];
     for (const b of this.c.buildings) pads.push({ x: b.x, z: b.z, yaw: b.yaw, halfW: b.width / 2 + 1.4, halfD: b.depth / 2 + 1.4, circle: false, height: b.padHeight, falloff: 7 });
     for (const r of this.c.ruins) pads.push({ x: r.x, z: r.z, yaw: 0, halfW: r.radius + 3, halfD: r.radius + 3, circle: true, height: r.padHeight, falloff: 6 });

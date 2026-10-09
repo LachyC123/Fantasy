@@ -127,6 +127,13 @@ export function validateContent(plan: WorldContent, terrain: TerrainLike, collis
 
   // Every weapon find can be reached: some standing spot 1.6 m away is open, walkable ground.
   for (const f of plan.finds ?? []) {
+    if (f.level) {
+      // Indoors: it must stand inside its (enterable) building, at a set height.
+      const b = plan.buildings.find((x) => x.id === f.level!.building);
+      check(!!b && b.enterable && f.y !== undefined, `${f.id}: indoor find without an enterable building`);
+      if (b) check(obbOverlap({ x: b.x, z: b.z, yaw: b.yaw, hw: b.width / 2 - 0.3, hd: b.depth / 2 - 0.3 }, { x: f.x, z: f.z, yaw: 0, hw: 0.05, hd: 0.05 }, 0), `${f.id}: not inside ${b.id}`);
+      continue;
+    }
     for (const b of plan.buildings) check(!obbOverlap({ x: b.x, z: b.z, yaw: b.yaw, hw: b.width / 2, hd: b.depth / 2 }, { x: f.x, z: f.z, yaw: 0, hw: 0.05, hd: 0.05 }, 0), `${f.id} lies inside ${b.id}`);
     if (collision) {
       let open = false;

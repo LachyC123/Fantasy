@@ -297,14 +297,17 @@ export class Ecology {
     const seed = this.seedGround ^ 0x5bd1e995;
     const cell = 1.4;
     const fields: WorldContent['fields'] = [];
+    const houses: WorldContent['buildings'] = [];
     for (const [qx, qz] of [
       [x0, z0],
       [x0 + size, z0],
       [x0, z0 + size],
       [x0 + size, z0 + size],
     ] as const) {
-      for (const plan of this.source.contentsNear(qx, qz))
+      for (const plan of this.source.contentsNear(qx, qz)) {
         for (const f of plan.fields) if (!fields.includes(f) && Math.abs(f.x - (x0 + size / 2)) < size + 60 && Math.abs(f.z - (z0 + size / 2)) < size + 60) fields.push(f);
+        for (const b of plan.buildings) if (!houses.includes(b) && Math.abs(b.x - (x0 + size / 2)) < size + 20 && Math.abs(b.z - (z0 + size / 2)) < size + 20) houses.push(b);
+      }
     }
     for (let cx = Math.floor(x0 / cell); cx <= Math.floor((x0 + size) / cell); cx++) {
       for (let cz = Math.floor(z0 / cell); cz <= Math.floor((z0 + size) / cell); cz++) {
@@ -325,6 +328,8 @@ export class Ecology {
           }
           continue;
         }
+        // Never through a floor.
+        if (houses.some((b) => pointInObb({ x: b.x, z: b.z, yaw: b.yaw, hw: b.width / 2, hd: b.depth / 2 }, x, z, 0.3))) continue;
         const h = this.terrain.height(x, z);
         if (h > 330) continue;
         const road = this.terrain.roadIndex.surfaceDistance(x, z);

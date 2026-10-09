@@ -25,6 +25,7 @@ import { validateWorld, type ValidationReport } from '../world/validation';
 import { deriveSeed } from '../core/rng';
 import { LootSystem } from '../gameplay/loot';
 import { WorldIndex, WorldTerrain } from '../world/worldIndex';
+import { Door } from '../world/doors';
 import { REGION, cellOf, inVale, VALE_BOUNDS } from '../world/regions';
 import type { Bounds } from '../world/types';
 
@@ -51,6 +52,7 @@ interface LoadedArea {
   group: THREE.Group;
   smoke: THREE.Vector3[];
   interactables: Interactable[];
+  doors: Door[];
 }
 
 const distToBounds = (b: Bounds, x: number, z: number): number => Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
@@ -81,6 +83,8 @@ export class WorldRuntime {
   /** Main-thread time per frame for raising streamed structures. */
   buildBudgetMs = 4;
   private interactableCache: Interactable[] | null = null;
+  /** Doors left open this journey (by id), restored when their area streams back in. */
+  private readonly openDoors = new Set<string>();
   private streamTimer = 0;
   /** Streaming counters for the debug overlay and tests. */
   readonly streamStats = { regionsLoaded: 0, regionsPlannedHere: 0, landmarks: 0, lastBuildMs: 0, maxBuildMs: 0 };
@@ -220,7 +224,13 @@ export class WorldRuntime {
     s.group.name = `area ${id}`;
     this.group.add(s.group);
     this.loot.addArea(id, content.finds, content.props);
-    const area: LoadedArea = { id, content, group: s.group, smoke: s.smoke, interactables: this.readables(content) };
+    const doors = s.doors.map((d) => {
+      const door = new Door(d.id, d.doorway, this.materials, this.collision);
+      if (this.openDoors.has(d.id)) door.toggle();
+      s.group.add(door.pivot);
+      return door;
+    });
+    const area: LoadedArea = { id, content, group: s.group, smoke: s.smoke, interactables: this.readables(content), doors };
     this.loaded.set(id, area);
     this.interactableCache = null;
     this.smoke.setEmitters([...this.loaded.values()].flatMap((a) => a.smoke));
@@ -244,6 +254,7 @@ export class WorldRuntime {
       if (m.isMesh) m.geometry.dispose();
     });
     this.collision.removeGroup(id);
+    for (const d of a.doors) d.dispose();
     this.loot.removeArea(id);
     this.loaded.delete(id);
     this.interactableCache = null;
@@ -359,6 +370,17 @@ export class WorldRuntime {
     return out;
   }
 
+  /** Hinged doors in the loaded areas. */
+  get doors(): Door[] {
+    return [...this.loaded.values()].flatMap((a) => a.doors);
+  }
+
+  toggleDoor(d: Door): void {
+    d.toggle();
+    if (d.open) this.openDoors.add(d.id);
+    else this.openDoors.delete(d.id);
+  }
+
   get interactables(): Interactable[] {
     return (this.interactableCache ??= [...this.loaded.values()].flatMap((a) => a.interactables));
   }
@@ -402,6 +424,7 @@ export class WorldRuntime {
       this.updateLandmarks(cam, 1);
     }
     this.continueBuild();
+    for (const a of this.loaded.values()) for (const d of a.doors) d.update(dt);
     this.terrainStreamer.update(cam);
     this.vegetation.update(cam);
     this.syncTreeColliders();

@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { Rng, deriveSeed } from '../core/rng';
 import { MeshBuilder, col, trs } from '../assets/geo';
-import { buildBuilding, type BoxCollider } from '../assets/buildings';
+import { buildBuilding, type BoxCollider, type Doorway } from '../assets/buildings';
 import { buildCastle } from '../assets/castle';
 import { generateTree } from '../assets/trees';
 import type { MaterialLibrary, MaterialName } from '../rendering/materials';
@@ -20,6 +20,8 @@ import { patchMaterial } from '../rendering/atmosphere';
 export interface StructureResult {
   group: THREE.Group;
   smoke: THREE.Vector3[];
+  /** Real doorways (enterable buildings), animated at runtime. */
+  doors: { id: string; doorway: Doorway }[];
   spireTips: THREE.Vector3[];
   stats: { buildings: number; colliders: number; triangles: number };
 }
@@ -100,7 +102,7 @@ function ruinTower(b: MeshBuilder, r: RuinPlan, world: CollisionWorld, road: { x
 }
 
 function prop(b: MeshBuilder, p: PropPlan, terrain: TerrainLike, world: CollisionWorld): void {
-  const y = terrain.height(p.x, p.z);
+  const y = p.y ?? terrain.height(p.x, p.z);
   const m = trs(p.x, y, p.z, p.yaw);
   switch (p.kind) {
     case 'well': {
@@ -468,11 +470,13 @@ export function* buildStructureSteps(plan: WorldContent, terrain: TerrainLike, m
   const group = new THREE.Group();
   group.name = 'structures';
   const smoke: THREE.Vector3[] = [];
+  const doors: { id: string; doorway: Doorway }[] = [];
   const village = new MeshBuilder();
   for (const bp of plan.buildings) {
     const r = buildBuilding(village, bp);
     r.colliders.forEach((c, i) => addBox(world, c, `${bp.id}/c${i}`));
     if (r.chimneyTop && bp.inhabited) smoke.push(r.chimneyTop);
+    if (r.doorway) doors.push({ id: `${bp.id}/door`, doorway: r.doorway });
     yield;
   }
   for (const ruin of plan.ruins) {
@@ -535,7 +539,7 @@ export function* buildStructureSteps(plan: WorldContent, terrain: TerrainLike, m
 
   yield* roadRibbons(plan, terrain, group);
 
-  return { group, smoke, spireTips: [], stats: { buildings: plan.buildings.length, colliders: 0, triangles } };
+  return { group, smoke, doors, spireTips: [], stats: { buildings: plan.buildings.length, colliders: 0, triangles } };
 }
 
 /** A castle's meshes and colliders (castles are landmarks, built from far away). */

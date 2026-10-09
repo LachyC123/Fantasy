@@ -155,7 +155,7 @@ export class LootSystem {
       mesh.receiveShadow = true;
       st.group.add(mesh);
     }
-    const ground = this.terrain.height(find.x, find.z);
+    const ground = find.y ?? this.terrain.height(find.x, find.z);
     const hafted = weapon.family !== 'blade';
     const len = hafted ? weapon.shape.gripLength + 0.12 : weapon.shape.bladeLength;
     const g = st.group;

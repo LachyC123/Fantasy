@@ -11,6 +11,7 @@ import { canonicalizeSeed, deriveSeed, GENERATOR_VERSION, Rng } from '../core/rn
 import { MacroField } from './macro';
 import { planCastle, localToWorld } from './castle';
 import { ContentBuilder, castlePad } from './contentBuilder';
+import { innChestLocal } from '../assets/buildings';
 import { VALE_BOUNDS, valeGates, type SiteSeed } from './regions';
 import { populateCamp, populateCottage, populateShrine, populateStones, populateWatchtower, siteLevelPads, type SiteContext } from './sitegen';
 import { buildRoad, RoadIndex, type RoadSpec } from './roads';
@@ -382,6 +383,14 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
         const o: Obb = { x, z, yaw, hw: width / 2, hd: depth / 2 };
         if (!canPlaceFootprint(ctx, o, 2.2, 0.32)) continue;
         const b = makeBuilding(ctx, hamletId, ctx.buildings.length, large ? 'longhouse' : 'cottage', x, z, yaw, width, depth, hr);
+        // The hamlet's first large house is its inn (enterable). No random draws change.
+        if (large && width >= 10 && !ctx.buildings.some((o) => o.kind === 'inn')) {
+          b.kind = 'inn';
+          b.floors = 2;
+          b.enterable = true;
+          if (b.upperStyle === b.wallStyle && b.wallStyle !== 'timber') b.upperStyle = 'plaster';
+          if (b.chimney === 'none') b.chimney = 'right';
+        }
         ctx.buildings.push(b);
         ids.push(b.id);
         if (hr.chance(0.5)) {
@@ -525,6 +534,14 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
     if (barn) {
       const w = localToWorld(barn.width / 2 - 1.4, barn.depth / 2 + 0.35, barn.yaw, barn.x, barn.z);
       finds.push({ id: `${seed}/find/barn`, x: w.x, z: w.z, yaw: barn.yaw, pose: 'leaning', seed: lootSeed(3), luck: -0.6, cls: fr.chance(0.5) ? 'spear' : 'axe', story: 'Left leaning against the barn wall.' });
+    }
+    const inn = ctx.buildings.find((b) => b.kind === 'inn');
+    if (inn) {
+      const lc = innChestLocal(inn);
+      const w = localToWorld(lc.x, lc.z, inn.yaw, inn.x, inn.z);
+      const level = { building: inn.id, height: lc.y };
+      props.push({ id: `${seed}/prop/inn-chest`, kind: 'chest', x: w.x, z: w.z, yaw: inn.yaw + Math.PI, level });
+      finds.push({ id: `${seed}/prop/inn-chest/find`, x: w.x, z: w.z, yaw: inn.yaw + Math.PI, pose: 'chest', seed: lootSeed(5), luck: 0.6, story: 'A guest’s chest, left behind in the inn’s loft.', level });
     }
     const cottage = ctx.buildings.find((b) => b.settlementId.startsWith('cottage-'));
     if (cottage) {

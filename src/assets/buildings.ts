@@ -22,9 +22,22 @@ export interface BoxCollider {
   y1: number;
 }
 
+/** A real doorway with a hinged door (enterable buildings). */
+export interface Doorway {
+  /** Hinge position (world) at floor level. */
+  hinge: THREE.Vector3;
+  /** Yaw of the closed door leaf (the building's yaw). */
+  yaw: number;
+  width: number;
+  height: number;
+  /** Wall thickness the door sits in. */
+  depth: number;
+}
+
 export interface BuildingResult {
   /** World-space oriented boxes for collision. */
   colliders: BoxCollider[];
+  doorway?: Doorway;
   chimneyTop: THREE.Vector3 | null;
   door: THREE.Vector3;
   /** Approximate roof ridge height above the pad. */
@@ -192,26 +205,49 @@ export function buildBuilding(b: MeshBuilder, plan: BuildingPlan): BuildingResul
   const groundStyle = plan.wallStyle;
   const upperStyle = plan.upperStyle;
   const jetty = floors > 1 && upperStyle !== 'stone' ? 0.35 : 0;
-  b.box(wallMat(groundStyle), m, 0, FLOOR_H / 2, 0, W, FLOOR_H, D, { color: wallCol, aoBottom: 0.35, aoHeight: 1.2 }, 0b001111);
-  if (floors > 1) {
-    const upCol = upperStyle === 'plaster' ? tint('#ffffff', 0.05).lerp(col('#fff2dc'), 0.5) : wallCol;
-    b.box(wallMat(upperStyle), m, 0, FLOOR_H * 1.5, 0, W, FLOOR_H, D + jetty * 2, { color: upCol }, 0b001111);
-    if (jetty > 0) {
-      // Jetty floor joists visible under the overhang.
-      for (const s of [-1, 1]) b.box('timber', m, 0, FLOOR_H - 0.1, s * (D / 2 + jetty / 2), W, 0.2, jetty, { color: col('#ffffff') });
-    }
-  }
+  const enter = plan.enterable;
+  const T = 0.3;
+  const upCol = upperStyle === 'plaster' ? tint('#ffffff', 0.05).lerp(col('#fff2dc'), 0.5) : wallCol;
 
   // Door on the +Z face.
   const doorX = isBarn ? 0 : THREE.MathUtils.clamp(rng.range(-W * 0.2, W * 0.2), -W / 2 + 1.2, W / 2 - 1.2);
   const doorW = isBarn ? Math.min(3.2, W * 0.45) : 1.1;
   const doorH = isBarn ? 2.8 : 2.05;
   const fz = D / 2;
-  b.box('planks', m, doorX, doorH / 2, fz + 0.04, doorW, doorH, 0.12, { color: col('#c8a888') });
+
+  if (enter) {
+    // Real walls with a doorway, so the inside exists.
+    const gm = wallMat(groundStyle);
+    const sh = { color: wallCol, aoBottom: 0.35, aoHeight: 1.2 };
+    b.box(gm, m, 0, FLOOR_H / 2, -D / 2 + T / 2, W, FLOOR_H, T, sh);
+    for (const sx of [-1, 1]) b.box(gm, m, sx * (W / 2 - T / 2), FLOOR_H / 2, 0, T, FLOOR_H, D - 2 * T, sh);
+    const left = doorX - doorW / 2 + W / 2;
+    const right = W / 2 - (doorX + doorW / 2);
+    b.box(gm, m, -W / 2 + left / 2, FLOOR_H / 2, fz - T / 2, left, FLOOR_H, T, sh);
+    b.box(gm, m, W / 2 - right / 2, FLOOR_H / 2, fz - T / 2, right, FLOOR_H, T, sh);
+    b.box(gm, m, doorX, (FLOOR_H + doorH) / 2, fz - T / 2, doorW, FLOOR_H - doorH, T, sh);
+    if (floors > 1) {
+      const um = wallMat(upperStyle);
+      const ush = { color: upCol };
+      const ud = D / 2 + jetty;
+      for (const sz of [-1, 1]) b.box(um, m, 0, FLOOR_H * 1.5, sz * (ud - T / 2), W, FLOOR_H, T, ush);
+      for (const sx of [-1, 1]) b.box(um, m, sx * (W / 2 - T / 2), FLOOR_H * 1.5, 0, T, FLOOR_H, ud * 2 - 2 * T, ush);
+    }
+  } else {
+    b.box(wallMat(groundStyle), m, 0, FLOOR_H / 2, 0, W, FLOOR_H, D, { color: wallCol, aoBottom: 0.35, aoHeight: 1.2 }, 0b001111);
+    if (floors > 1) b.box(wallMat(upperStyle), m, 0, FLOOR_H * 1.5, 0, W, FLOOR_H, D + jetty * 2, { color: upCol }, 0b001111);
+  }
+  if (floors > 1 && jetty > 0) {
+    // Jetty floor joists visible under the overhang.
+    for (const s of [-1, 1]) b.box('timber', m, 0, FLOOR_H - 0.1, s * (D / 2 + jetty / 2), W, 0.2, jetty, { color: col('#ffffff') });
+  }
+
+  // The door leaf of an enterable building is a separate, hinged mesh (built at runtime).
+  if (!enter) b.box('planks', m, doorX, doorH / 2, fz + 0.04, doorW, doorH, 0.12, { color: col('#c8a888') });
   b.box('timber', m, doorX, doorH + 0.12, fz + 0.08, doorW + 0.4, 0.24, 0.2, { color: col('#ffffff') });
   for (const s of [-1, 1]) b.box('timber', m, doorX + s * (doorW / 2 + 0.1), doorH / 2, fz + 0.08, 0.2, doorH, 0.18, { color: col('#ffffff') });
   if (!isBarn) {
-    b.box('metal', m, doorX + doorW * 0.32, doorH * 0.48, fz + 0.12, 0.08, 0.08, 0.06, { color: col('#2a2622') });
+    if (!enter) b.box('metal', m, doorX + doorW * 0.32, doorH * 0.48, fz + 0.12, 0.08, 0.08, 0.06, { color: col('#2a2622') });
     // Worn step stone in front of the door.
     b.box('stone', m, doorX, 0.1, fz + 0.55, doorW + 0.6, 0.4, 0.8, { color: tint('#c8c0b0') });
   }
@@ -226,7 +262,10 @@ export function buildBuilding(b: MeshBuilder, plan: BuildingPlan): BuildingResul
       if (avoidDoor && Math.abs(x - doorX) < doorW / 2 + 0.7) continue;
       if (!rng.chance(isBarn ? 0.25 : 0.85)) continue;
       const w = isBarn ? 0.6 : 0.85;
-      windowUnit(b, m, x, y, z, outward, w, isBarn ? 0.5 : 1.0, rng, glowing && rng.chance(0.6), !isBarn && rng.chance(0.45));
+      const glow = glowing && rng.chance(0.6);
+      windowUnit(b, m, x, y, z, outward, w, isBarn ? 0.5 : 1.0, rng, glow, !isBarn && rng.chance(0.45));
+      // From inside, the same window glows in the wall.
+      if (enter) b.box(glow ? 'glowWindow' : 'window', m, x, y, z - outward * (T + 0.01), w, 1.0, 0.04, { color: col('#ffffff') });
       spans.push([x - w / 2, x + w / 2]);
     }
     return spans;
@@ -287,6 +326,14 @@ export function buildBuilding(b: MeshBuilder, plan: BuildingPlan): BuildingResul
     const c = wallCol;
     if (sx > 0) b.tri(gableMat, p0, p2, p1, [-(D / 2), wallH], [0, wallH + rise], [D / 2, wallH], c);
     else b.tri(gableMat, p1, p2, p0, [D / 2, wallH], [0, wallH + rise], [-(D / 2), wallH], c);
+    if (enter) {
+      // The gable seen from inside the loft.
+      const q0 = new THREE.Vector3(x - sx * 0.02, wallH, -(D / 2 + jetty)).applyMatrix4(m);
+      const q1 = new THREE.Vector3(x - sx * 0.02, wallH, D / 2 + jetty).applyMatrix4(m);
+      const q2 = new THREE.Vector3(x - sx * 0.02, wallH + rise, 0).applyMatrix4(m);
+      if (sx > 0) b.tri(gableMat, q1, q2, q0, [D / 2, wallH], [0, wallH + rise], [-(D / 2), wallH], c.clone().multiplyScalar(0.8));
+      else b.tri(gableMat, q0, q2, q1, [-(D / 2), wallH], [0, wallH + rise], [D / 2, wallH], c.clone().multiplyScalar(0.8));
+    }
     if (gableMat === 'plaster') {
       // Gable king post.
       b.box('timber', m, sx * (W / 2 + 0.06), wallH + rise / 2, 0, 0.12, rise, 0.2, { color: col('#ffffff') });
@@ -328,9 +375,33 @@ export function buildBuilding(b: MeshBuilder, plan: BuildingPlan): BuildingResul
     b.box('glowWindow', m, doorX + (doorX > 0 ? 0.95 : -0.95), 2.2, fz + 0.22, 0.24, 0.32, 0.24, { color: col('#ffffff') });
   }
 
-  const colliders: BoxCollider[] = [
-    { x: plan.x, z: plan.z, yaw: plan.yaw, hw: W / 2 + 0.2, hd: D / 2 + 0.2 + jetty, y0: plan.padHeight - 1.5, y1: plan.padHeight + wallH + rise },
-  ];
+  const colliders: BoxCollider[] = [];
+  let doorway: Doorway | undefined;
+  if (enter) {
+    const at = (lx: number, lz: number): THREE.Vector3 => new THREE.Vector3(lx, 0, lz).applyMatrix4(m);
+    const wall = (lx: number, lz: number, hw: number, hd: number, y0: number, y1: number): void => {
+      const c = at(lx, lz);
+      colliders.push({ x: c.x, z: c.z, yaw: plan.yaw, hw, hd, y0: plan.padHeight + y0, y1: plan.padHeight + y1 });
+    };
+    const top = wallH + rise;
+    wall(0, -D / 2 + T / 2, W / 2, T / 2, -1.5, top);
+    for (const sx of [-1, 1]) wall(sx * (W / 2 - T / 2), 0, T / 2, D / 2, -1.5, top);
+    const left = doorX - doorW / 2 + W / 2;
+    const right = W / 2 - (doorX + doorW / 2);
+    wall(-W / 2 + left / 2, fz - T / 2, left / 2, T / 2, -1.5, top);
+    wall(W / 2 - right / 2, fz - T / 2, right / 2, T / 2, -1.5, top);
+    wall(doorX, fz - T / 2, doorW / 2, T / 2, doorH, top);
+    if (floors > 1) {
+      const ud = D / 2 + jetty;
+      for (const sz of [-1, 1]) wall(0, sz * (ud - T / 2), W / 2, T / 2, FLOOR_H, top);
+    }
+    furnishInn(b, m, rng, { W, D, T, jetty, doorX, doorW, floors, chimneySide: plan.chimney === 'left' ? -1 : 1 }, wall);
+    // The chimney stack rises through the loft.
+    if (plan.chimney !== 'none') wall((plan.chimney === 'left' ? -1 : 1) * (W / 2 - 0.55), -0.2, 0.5, 0.5, FLOOR_H - 0.2, top);
+    doorway = { hinge: at(doorX - doorW / 2, fz - T / 2).setY(plan.padHeight), yaw: plan.yaw, width: doorW, height: doorH, depth: T };
+  } else {
+    colliders.push({ x: plan.x, z: plan.z, yaw: plan.yaw, hw: W / 2 + 0.2, hd: D / 2 + 0.2 + jetty, y0: plan.padHeight - 1.5, y1: plan.padHeight + wallH + rise });
+  }
   // Lean-to on one gable end of larger buildings.
   if ((plan.kind === 'farmhouse' || plan.kind === 'longhouse') && rng.chance(0.6)) {
     const sx = rng.chance(0.5) ? -1 : 1;
@@ -345,8 +416,116 @@ export function buildBuilding(b: MeshBuilder, plan: BuildingPlan): BuildingResul
 
   return {
     colliders,
+    doorway,
     chimneyTop,
     door: new THREE.Vector3(doorX, 0, fz + 0.6).applyMatrix4(m),
     height: wallH + rise,
   };
+}
+
+interface InnLayout {
+  W: number;
+  D: number;
+  T: number;
+  jetty: number;
+  doorX: number;
+  doorW: number;
+  floors: number;
+  chimneySide: number;
+}
+
+/** Where the inn's upstairs chest stands (local coordinates; shared with the site plan). */
+export function innChestLocal(plan: { width: number; depth: number; chimney: BuildingPlan['chimney'] }): { x: number; y: number; z: number } {
+  const side = plan.chimney === 'left' ? -1 : 1;
+  return { x: side * (plan.width / 2 - 1.1), y: FLOOR_H, z: plan.depth / 2 - 1.0 };
+}
+
+/**
+ * The inn's rooms: a planked taproom with a hearth on the chimney wall, a
+ * counter with barrels behind it, tables and benches; a stair along the back
+ * wall up to a loft with beds. Every solid piece has a collider.
+ */
+function furnishInn(b: MeshBuilder, m: THREE.Matrix4, rng: Rng, L: InnLayout, wall: (lx: number, lz: number, hw: number, hd: number, y0: number, y1: number) => void): void {
+  const { W, D, T } = L;
+  const iw = W - 2 * T;
+  const id = D - 2 * T;
+  const wood = col('#a07850');
+  const dark = col('#6a4a30');
+  // Floors.
+  b.box('planks', m, 0, 0.03, 0, iw, 0.06, id, { color: col('#b08a64') });
+  // Hearth on the chimney wall.
+  const hx = L.chimneySide * (W / 2 - T - 0.45);
+  b.box('stone', m, hx, 0.6, -0.2, 0.9, 1.2, 1.8, { color: col('#d0c8bc'), aoBottom: 0.3 });
+  b.box('plain', m, hx - L.chimneySide * 0.46, 0.45, -0.2, 0.04, 0.6, 1.0, { color: col('#201810') });
+  b.box('glowWindow', m, hx - L.chimneySide * 0.44, 0.3, -0.2, 0.06, 0.3, 0.7, { color: col('#ffffff') });
+  b.box('timber', m, hx - L.chimneySide * 0.1, 1.25, -0.2, 1.1, 0.12, 2.0, { color: wood });
+  wall(hx, -0.2, 0.45, 0.9, 0, 1.2);
+  // Stair along the back wall, on the side away from the hearth, climbing towards the middle.
+  const s0 = -L.chimneySide * (W / 2 - T - 0.25);
+  const steps = 7;
+  const tread = 0.42;
+  const rise = FLOOR_H / steps;
+  const sz = -D / 2 + T + 0.5;
+  for (let k = 0; k < steps; k++) {
+    const x = s0 + L.chimneySide * (k + 0.5) * tread;
+    const h = rise * (k + 1);
+    b.box('planks', m, x, h / 2, sz, tread, h, 0.95, { color: k % 2 ? wood : wood.clone().multiplyScalar(0.92) });
+    wall(x, sz, tread / 2, 0.47, -0.2, h);
+  }
+  const stairEnd = s0 + L.chimneySide * steps * tread;
+  // Counter with barrels behind it, against the back wall on the hearth side.
+  const cx = L.chimneySide * Math.min(W / 2 - T - 2.0, Math.max(0.9, Math.abs(stairEnd) + 1.6));
+  const cw = 2.2;
+  const cz = -D / 2 + T + 1.45;
+  b.box('planks', m, cx, 0.55, cz, cw, 1.1, 0.55, { color: dark });
+  b.box('planks', m, cx, 1.12, cz, cw + 0.15, 0.06, 0.7, { color: wood });
+  wall(cx, cz, cw / 2, 0.3, 0, 1.15);
+  for (let k = 0; k < 2; k++) {
+    const bx = cx + (k - 0.5) * 0.9;
+    b.cylinder('planks', m, bx, 0, -D / 2 + T + 0.45, 0.32, 0.32, 0.85, 8, { color: col('#c09878') }, { capTop: true, flat: true });
+  }
+  // Tables and benches in the front half of the room.
+  const tables = W > 12.5 ? 3 : 2;
+  for (let k = 0; k < tables; k++) {
+    const tx = -W / 2 + T + ((k + 0.5) * iw) / tables;
+    if (Math.abs(tx - L.doorX) < 1.3) continue;
+    const tz = D / 2 - T - 1.6 - rng.range(0, 0.3);
+    b.box('planks', m, tx, 0.75, tz, 1.4, 0.07, 0.8, { color: wood });
+    for (const lx of [-0.6, 0.6]) for (const lz of [-0.32, 0.32]) b.box('timber', m, tx + lx, 0.37, tz + lz, 0.08, 0.74, 0.08, { color: dark });
+    for (const bz of [-0.65, 0.65]) b.box('planks', m, tx, 0.42, tz + bz, 1.3, 0.07, 0.3, { color: dark });
+    wall(tx, tz, 0.72, 0.42, 0, 0.8);
+    if (rng.chance(0.6)) b.box('plain', m, tx + rng.range(-0.3, 0.3), 0.85, tz, 0.12, 0.14, 0.12, { color: col('#d8c8a0') });
+  }
+  if (L.floors < 2) return;
+  // The loft: a floor with a well over the stair, a rail, and two beds against the front wall.
+  const fy = FLOOR_H - 0.1;
+  const ud = D / 2 + L.jetty - T;
+  const holeZ1 = sz + 0.55;
+  const holeX0 = Math.min(s0, stairEnd) - 0.05;
+  const holeX1 = Math.max(s0, stairEnd) + 0.05;
+  const plank = col('#a8825c');
+  // Front part, full width.
+  b.box('planks', m, 0, fy, (holeZ1 + ud) / 2, iw, 0.2, ud - holeZ1, { color: plank });
+  wall(0, (holeZ1 + ud) / 2, iw / 2, (ud - holeZ1) / 2, fy - 0.1, fy + 0.1);
+  // Back strip beside the stair well.
+  const bx0 = L.chimneySide > 0 ? holeX1 : -W / 2 + T;
+  const bx1 = L.chimneySide > 0 ? W / 2 - T : holeX0;
+  b.box('planks', m, (bx0 + bx1) / 2, fy, (-ud + holeZ1) / 2, bx1 - bx0, 0.2, holeZ1 + ud, { color: plank });
+  wall((bx0 + bx1) / 2, (-ud + holeZ1) / 2, (bx1 - bx0) / 2, (holeZ1 + ud) / 2, fy - 0.1, fy + 0.1);
+  // Rail along the stair well's open edge.
+  const rx = (holeX0 + holeX1) / 2;
+  b.box('timber', m, rx, FLOOR_H + 0.9, holeZ1 + 0.05, holeX1 - holeX0, 0.08, 0.08, { color: dark });
+  for (const px of [holeX0 + 0.05, rx, holeX1 - 0.05]) b.box('timber', m, px, FLOOR_H + 0.45, holeZ1 + 0.05, 0.08, 0.9, 0.08, { color: dark });
+  wall(rx, holeZ1 + 0.05, (holeX1 - holeX0) / 2, 0.05, FLOOR_H, FLOOR_H + 0.95);
+  // Beds.
+  for (const k of [-1, 1]) {
+    const bx = k * W * 0.22;
+    const bz = ud - 1.1;
+    b.box('planks', m, bx, FLOOR_H + 0.25, bz, 1.0, 0.4, 2.0, { color: dark });
+    b.box('plain', m, bx, FLOOR_H + 0.5, bz, 0.95, 0.14, 1.9, { color: rng.pick([col('#9a4a3a'), col('#4a5a8a'), col('#6a7a4a')]) });
+    b.box('plain', m, bx, FLOOR_H + 0.6, bz + 0.75, 0.7, 0.12, 0.35, { color: col('#e8e0d0') });
+    wall(bx, bz, 0.5, 1.0, FLOOR_H, FLOOR_H + 0.55);
+  }
+  // A lantern glow under the ridge.
+  b.box('glowWindow', m, 0, FLOOR_H * 2 + 0.6, 0, 0.25, 0.3, 0.25, { color: col('#ffffff') });
 }

@@ -11,6 +11,7 @@ import { ContentBuilder, buildingObb, facing } from './contentBuilder';
 import type { SiteSeed } from './regions';
 import type { CastlePlan, FieldPlan, FencePlan, P2, PropPlan, RoadPlan, SiteKind, WeaponFind } from './types';
 import { obbOverlap } from './geometry2d';
+import { innChestLocal } from '../assets/buildings';
 
 export interface SiteContext {
   cb: ContentBuilder;
@@ -76,7 +77,7 @@ export function populateVillage(ctx: SiteContext, s: SiteSeed): void {
     { kind: 'church', w: [17, 21], d: [8, 9.5], setback: [6, 9] },
     { kind: 'inn', w: [12, 14], d: [8.5, 9.5], setback: [3.2, 4.5] },
   ];
-  let inn: { x: number; z: number; yaw: number; w: number; d: number } | null = null;
+  let inn: { x: number; z: number; yaw: number; w: number; d: number; id: string } | null = null;
   // Civic buildings take the plots nearest the centre.
   for (const c of civic) {
     for (const f of frames.slice(0, 16)) {
@@ -91,7 +92,7 @@ export function populateVillage(ctx: SiteContext, s: SiteSeed): void {
       const b = cb.tryBuilding(sid, c.kind, x, z, yaw, w, d, rng, 2.4, 0.3);
       if (b) {
         ids.push(b.id);
-        if (c.kind === 'inn') inn = { x, z, yaw, w, d };
+        if (c.kind === 'inn') inn = { x, z, yaw, w, d, id: b.id };
         break;
       }
     }
@@ -148,10 +149,15 @@ export function populateVillage(ctx: SiteContext, s: SiteSeed): void {
       }
     }
   }
-  // A chest behind the inn: the landlord's lost-and-found.
+  // Upstairs in the inn: a guest's chest, left behind.
   if (inn) {
-    const p = cb.local(inn.w / 2 + 1.6, -inn.d / 2 + 1, inn.yaw, inn.x, inn.z);
-    if (cb.canPlace({ x: p.x, z: p.z, yaw: inn.yaw, hw: 0.6, hd: 0.45 }, 1.2, 0.4)) addChest(cb, s, 0, p.x, p.z, inn.yaw + Math.PI / 2, ctx.fortune - 0.3 + rng.gaussian(0, 0.6), 'The landlord’s lost-and-found chest, never claimed.');
+    const b = cb.c.buildings.find((x) => x.id === inn!.id)!;
+    const lc = innChestLocal(b);
+    const p = cb.local(lc.x, lc.z, b.yaw, b.x, b.z);
+    const id = `${s.id}/chest0`;
+    const level = { building: b.id, height: lc.y };
+    cb.c.props.push({ id, kind: 'chest', x: p.x, z: p.z, yaw: b.yaw + Math.PI, level });
+    pushFind(cb, { id: `${id}/find`, x: p.x, z: p.z, yaw: b.yaw + Math.PI, pose: 'chest', seed: lootSeed(s, 0), luck: ctx.fortune + rng.gaussian(0.2, 0.9), story: 'A guest’s chest, left behind in the inn’s loft.', level });
   }
   // Village signs where streets leave the village.
   let si = 0;
