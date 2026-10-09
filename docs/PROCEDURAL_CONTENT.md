@@ -64,7 +64,8 @@ matter, in line with the brief: legendary items are meaningful finds, not endles
   carried by creatures.
 
 **In the game now:**
-- You start each journey with a humble common steel or iron longsword, generated from the seed.
+- You start each journey with a humble common steel or iron weapon generated from the seed: a
+  longsword in `reference-valley`; otherwise a longsword, shortsword, sabre, falchion, axe, mace, spear or dagger.
 - **Five weapon finds** wait at planned places, each with its own story and luck:
   - the watchtower rubble (+0.4);
   - an offering at the waystone (+1.1);

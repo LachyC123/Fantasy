@@ -96,9 +96,10 @@ export class Ecology {
   }
 
   /** The authored vale's forests (valid where the anchor weight is above zero). */
-  private valeForest(x: number, z: number): number {
+  private valeForest(wx: number, wz: number): number {
     const macro = this.terrain.macro;
     const p = macro.params;
+    const { x, z } = macro.toLocal(wx, wz);
     // Southern ridge forest with a ragged edge.
     const edge = p.forestEdgeZ + 28 * this.nEdge.fbm(x / 140, 0.5, 3);
     let f = smoothstep(edge - 6, edge + 18, z);

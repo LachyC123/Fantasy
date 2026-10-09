@@ -18,7 +18,7 @@ import { buildRoad, RoadIndex, type RoadSpec } from './roads';
 import { Terrain } from './terrain';
 import { obbOverlap, obbSamples, pointInObb, type Obb } from './geometry2d';
 import { distSqToSegment } from '../core/math';
-import { villageName, towerName, farmName, familyName, stonesName, shrineName, campName, uniqueName } from './names';
+import { valeName, villageName, towerName, farmName, familyName, stonesName, shrineName, campName, uniqueName } from './names';
 import type {
   BuildingKind,
   BuildingPlan,
@@ -133,12 +133,12 @@ function makeBuilding(
   return plan;
 }
 
-/** Index of the road sample nearest to a target Z (searching the whole road). */
-function sampleNearZ(road: RoadPlan, z: number): number {
+/** Index of the road sample nearest to a target distance down the valley (authored Z). */
+function sampleNearZ(road: RoadPlan, z: number, macro: MacroField): number {
   let best = 0;
   let bestD = Infinity;
   road.points.forEach((p, i) => {
-    const d = Math.abs(p.z - z);
+    const d = Math.abs(macro.toLocal(p.x, p.z).z - z);
     if (d < bestD) {
       bestD = d;
       best = i;
@@ -166,29 +166,34 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
   const hA = (x: number, z: number): number => stageA.heightBeforeRoads(x, z);
   const cl = (z: number): number => macro.centerline(z);
   const j = (amount: number): number => rng.range(-amount, amount);
+  // The composition is authored in its own frame (spawn at the origin, castle up the valley along −Z);
+  // each seed turns, mirrors and stretches that frame (the reference seed keeps it as authored).
+  const W = (x: number, z: number): P2 => macro.toWorld(x, z);
+  const ref = seed === REFERENCE_SEED;
+  const lr = new Rng(deriveSeed(seed, 'vale/layout'));
+  const hamletZ = ref ? -825 : lr.range(-760, -1000);
+  const farmZ = ref ? -600 : hamletZ + lr.range(220, 290);
+  const hamletSize = ref ? 9 : lr.int(6, 12);
+  const cottageCount = ref ? 4 : lr.int(2, 6);
 
   // --- Spawn under the ancient tree -------------------------------------
   // The ancient tree stands a short walk inside the forest edge so the vale
   // opens up through a framed gap in the trees (vista recipe A).
   const edgeZ = macro.params.forestEdgeZ;
-  const ancientTree = { x: j(4), z: edgeZ + 56 + j(3) };
-  const spawn = { x: ancientTree.x - 1.2, z: ancientTree.z - 8.5, yaw: 0 };
+  const treeL = { x: j(4), z: edgeZ + 56 + j(3) };
+  const ancientTree = W(treeL.x, treeL.z);
+  const spawnL = { x: treeL.x - 1.2, z: treeL.z - 8.5 };
+  const spawn = { ...W(spawnL.x, spawnL.z), yaw: 0 };
 
   // --- Roads -------------------------------------------------------------
-  const junction: P2 = { x: 26 + j(8), z: edgeZ - 92 + j(6) };
+  const junction: P2 = W(26 + j(8), edgeZ - 92 + j(6));
   const footSpec: RoadSpec = {
     id: `${seed}/road/footpath`,
     name: 'Old Root Path',
     kind: 'footpath',
     halfWidth: 1.1,
     blend: 4,
-    control: [
-      { x: spawn.x, z: spawn.z - 3 },
-      { x: -4 + j(3), z: spawn.z - 24 },
-      { x: 6 + j(3), z: edgeZ - 2 },
-      { x: 3 + j(4), z: edgeZ - 45 },
-      junction,
-    ],
+    control: [W(spawnL.x, spawnL.z - 3), W(-4 + j(3), spawnL.z - 24), W(6 + j(3), edgeZ - 2), W(3 + j(4), edgeZ - 45), junction],
     from: 'ancient-tree',
     to: 'watchtower',
     maxGrade: 0.3,
@@ -196,26 +201,27 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
   };
 
   const gate = castle.gate;
-  const cx = castle.x;
-  const cz = castle.z;
+  const cx = macro.params.castleX;
+  const cz = macro.params.castleZ;
+  const gl = macro.toLocal(gate.x, gate.z);
   const mainControl: P2[] = [
     junction,
-    { x: 18 + j(8) + cl(-215), z: -215 + j(8) },
-    { x: 8 + j(10) + cl(-310), z: -310 + j(10) },
-    { x: -42 + j(14) + cl(-395), z: -395 + j(10) },
-    { x: -22 + j(14) + cl(-480), z: -480 + j(10) },
-    { x: 32 + j(12) + cl(-565), z: -565 + j(10) },
-    { x: 52 + j(12) + cl(-655), z: -655 + j(10) },
-    { x: 14 + j(10) + cl(-745), z: -745 + j(10) },
-    { x: 0 + j(6) + cl(-825), z: -825 },
-    { x: -28 + j(12) + cl(-910), z: -910 + j(10) },
-    { x: 22 + j(12) + cl(-1030), z: -1030 + j(10) },
-    { x: 64 + j(12) + cl(-1160), z: -1160 + j(10) },
-    { x: cx - 95, z: cz + 455 },
-    { x: cx + 105, z: cz + 345 },
-    { x: cx - 85, z: cz + 245 },
-    { x: cx + 40, z: cz + 168 },
-    { x: gate.x, z: gate.z + 12 },
+    W(18 + j(8) + cl(-215), -215 + j(8)),
+    W(8 + j(10) + cl(-310), -310 + j(10)),
+    W(-42 + j(14) + cl(-395), -395 + j(10)),
+    W(-22 + j(14) + cl(-480), -480 + j(10)),
+    W(32 + j(12) + cl(-565), -565 + j(10)),
+    W(52 + j(12) + cl(-655), -655 + j(10)),
+    W(14 + j(10) + cl(-745), -745 + j(10)),
+    W(0 + j(6) + cl(-825), -825),
+    W(-28 + j(12) + cl(-910), -910 + j(10)),
+    W(22 + j(12) + cl(-1030), -1030 + j(10)),
+    W(64 + j(12) + cl(-1160), -1160 + j(10)),
+    W(cx - 95, cz + 455),
+    W(cx + 105, cz + 345),
+    W(cx - 85, cz + 245),
+    W(cx + 40, cz + 168),
+    W(gl.x, gl.z + 12),
     { x: gate.x, z: gate.z },
   ];
   const mainSpec: RoadSpec = {
@@ -272,7 +278,7 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
   // --- Farmstead ---------------------------------------------------------
   const farmId = 'farm';
   {
-    const i = sampleNearZ(mainRoad, -600 + j(20));
+    const i = sampleNearZ(mainRoad, farmZ + j(20), macro);
     const f = roadFrame(mainRoad, i);
     const side = rng.chance(0.6) ? 1 : -1;
     const yard: P2 = { x: f.p.x + f.nx * side * 64, z: f.p.z + f.nz * side * 64 };
@@ -362,12 +368,13 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
   const hamletId = 'hamlet';
   {
     const hr = new Rng(deriveSeed(seed, 'settlement/v1', 0));
-    const centre = sampleNearZ(mainRoad, -825);
+    const centre = sampleNearZ(mainRoad, hamletZ, macro);
     const ids: string[] = [];
     const spacing = 9; // samples (×2 m)
-    for (let k = -5; k <= 5 && ids.length < 9; k++) {
+    const reach = Math.max(5, Math.ceil(hamletSize / 2));
+    for (let k = -reach; k <= reach && ids.length < hamletSize; k++) {
       for (const side of [-1, 1]) {
-        if (ids.length >= 9) break;
+        if (ids.length >= hamletSize) break;
         if (!hr.chance(0.72)) continue;
         const i = centre + k * spacing + hr.int(-1, 1);
         if (i < 2 || i > mainRoad.points.length - 3) continue;
@@ -412,18 +419,20 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
     if (!ctx.buildings.some((b) => obbOverlap(buildingObb(b), { x: wellPos.x, z: wellPos.z, yaw: 0, hw: 1.3, hd: 1.3 }, 1.5))) {
       props.push({ id: `${seed}/prop/well`, kind: 'well', x: wellPos.x, z: wellPos.z, yaw: 0 });
     }
-    const s = roadFrame(mainRoad, Math.max(2, centre - 6 * spacing));
-    props.push({ id: `${seed}/prop/sign-hamlet`, kind: 'signpost', x: s.p.x + s.nx * 4.3, z: s.p.z + s.nz * 4.3, yaw: facing(0, 0, s.tx, s.tz), label: settlements[settlements.length - 1]!.name });
+    // Beyond the last house; on whichever verge is clear of buildings.
+    const s = roadFrame(mainRoad, Math.max(2, centre - (reach + 1) * spacing));
+    const verge = [1, -1].find((side) => !ctx.buildings.some((b) => obbOverlap(buildingObb(b), { x: s.p.x + s.nx * side * 4.3, z: s.p.z + s.nz * side * 4.3, yaw: 0, hw: 0.5, hd: 0.5 }, 3)));
+    if (verge !== undefined) props.push({ id: `${seed}/prop/sign-hamlet`, kind: 'signpost', x: s.p.x + s.nx * verge * 4.3, z: s.p.z + s.nz * verge * 4.3, yaw: facing(0, 0, s.tx, s.tz), label: settlements[settlements.length - 1]!.name });
   }
 
   // --- Lone cottages on the valley slopes, each with its own track ------
   {
     const cr = new Rng(deriveSeed(seed, 'cottages/v1'));
     let placed = 0;
-    for (let attempt = 0; attempt < 140 && placed < 4; attempt++) {
-      const z = cr.range(-480, -1250);
+    for (let attempt = 0; attempt < 140 && placed < cottageCount; attempt++) {
+      const lz = cr.range(-480, -1250);
       const side = cr.chance(0.5) ? -1 : 1;
-      const x = cl(z) + side * cr.range(150, 360);
+      const { x, z } = W(cl(lz) + side * cr.range(150, 360), lz);
       // Keep apart from other sites and the hamlet/farm.
       if (settlements.some((s) => Math.hypot(s.x - x, s.z - z) < 160)) continue;
       if (ctx.buildings.some((b) => Math.hypot(b.x - x, b.z - z) < 120)) continue;
@@ -629,7 +638,7 @@ export function generateWorldPlan(seedInput: string, macroIn?: MacroField): Worl
     ...content,
     seed,
     generatorVersion: GENERATOR_VERSION,
-    regionName: 'The Vale of Unwritten Days',
+    regionName: ref ? 'The Vale of Unwritten Days' : valeName(lr),
     spawn,
     ancientTree,
     castle,

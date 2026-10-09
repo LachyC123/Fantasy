@@ -30,8 +30,27 @@ export interface MacroParams {
   forestEdgeZ: number;
 }
 
+/**
+ * How the authored vale composition sits in the world for this seed: turned to any compass
+ * direction, perhaps mirrored, and stretched along and across the valley. The reference seed
+ * keeps the identity frame (the reference layout).
+ */
+export interface ValeFrame {
+  angle: number;
+  mirror: 1 | -1;
+  /** Across-valley stretch. */
+  sx: number;
+  /** Along-valley stretch (spawn → castle distance). */
+  sz: number;
+}
+
+export const REFERENCE_FRAME_SEED = 'reference-valley';
+
 export class MacroField {
   readonly params: MacroParams;
+  readonly frame: ValeFrame;
+  private readonly fc: number;
+  private readonly fs: number;
   private readonly nDetail: Noise2D;
   private readonly nShape: Noise2D;
   private readonly nRidge: Noise2D;
@@ -53,6 +72,45 @@ export class MacroField {
       ridgeHeight: rng.range(30, 36),
       forestEdgeZ: rng.range(-78, -64),
     };
+    // Every other seed lays the vale out its own way (a separate stream, so the reference is untouched).
+    const fr = new Rng(deriveSeed(seed, 'terrain/frame'));
+    if (seed === REFERENCE_FRAME_SEED) {
+      this.frame = { angle: 0, mirror: 1, sx: 1, sz: 1 };
+    } else {
+      this.frame = { angle: fr.range(0, Math.PI * 2), mirror: fr.chance(0.5) ? -1 : 1, sx: fr.range(0.85, 1.25), sz: fr.range(0.8, 1.08) };
+      const p = this.params;
+      p.castleX += fr.range(-170, 210);
+      p.meanderAmp *= fr.range(0.4, 1.5);
+      p.ridgeHeight *= fr.range(0.75, 1.3);
+      p.cragHeight *= fr.range(0.85, 1.15);
+      p.plateauRadius *= fr.range(0.92, 1.05);
+    }
+    this.fc = Math.cos(this.frame.angle);
+    this.fs = Math.sin(this.frame.angle);
+  }
+
+  /** Authored vale coordinates → world. */
+  toWorld(lx: number, lz: number): { x: number; z: number } {
+    const X = lx * this.frame.sx * this.frame.mirror;
+    const Z = lz * this.frame.sz;
+    return { x: this.fc * X + this.fs * Z, z: -this.fs * X + this.fc * Z };
+  }
+
+  /** World → authored vale coordinates. */
+  toLocal(x: number, z: number): { x: number; z: number } {
+    const X = this.fc * x - this.fs * z;
+    const Z = this.fs * x + this.fc * z;
+    return { x: X / (this.frame.sx * this.frame.mirror), z: Z / this.frame.sz };
+  }
+
+  /** A heading in authored coordinates (0 = local +Z) → world yaw. */
+  yawToWorld(localYaw: number): number {
+    return this.frame.angle + this.frame.mirror * localYaw;
+  }
+
+  /** The castle crag's centre in world coordinates. */
+  get castle(): { x: number; z: number } {
+    return this.toWorld(this.params.castleX, this.params.castleZ);
   }
 
   /** Valley centreline X at a given Z (gentle meander). */
@@ -66,6 +124,11 @@ export class MacroField {
    * rim, where the open procedural countryside takes over.
    */
   anchorWeight(x: number, z: number): number {
+    const l = this.toLocal(x, z);
+    return this.anchorLocal(l.x, l.z);
+  }
+
+  private anchorLocal(x: number, z: number): number {
     const ex = (x - this.centerline(z)) / 1900;
     const ez = (z + 800) / (z < -800 ? 1750 : 1250);
     return 1 - smoothstep(0.82, 1.22, Math.sqrt(ex * ex + ez * ez));
@@ -73,11 +136,12 @@ export class MacroField {
 
   /** Base height in metres: the vale blended into the open world. */
   height(x: number, z: number): number {
-    const a = this.anchorWeight(x, z);
-    if (a >= 1) return this.valeHeight(x, z);
-    const wild = this.wildHeight(x, z);
+    const l = this.toLocal(x, z);
+    const a = this.anchorLocal(l.x, l.z);
+    if (a >= 1) return this.valeHeight(l.x, l.z);
+    const wild = this.wildHeight(x, z, l.x, l.z);
     if (a <= 0) return wild;
-    return wild + (this.valeHeight(x, z) - wild) * a;
+    return wild + (this.valeHeight(l.x, l.z) - wild) * a;
   }
 
   /**
@@ -85,7 +149,7 @@ export class MacroField {
    * rise in some places and leave low passes between their peaks. A range is placed deliberately
    * north of the vale, so the opening vista always has blue mountains on the horizon.
    */
-  wildHeight(x: number, z: number): number {
+  wildHeight(x: number, z: number, lx = x, lz = z): number {
     const nd = this.nDetail;
     const ns = this.nShape;
     const wx = x + 90 * this.nWarp.sample(x / 900, z / 900);
@@ -98,8 +162,9 @@ export class MacroField {
     // Mountain ranges: sparse, with passes where the range mask dips.
     let mm = smoothstep(0.38, 0.7, this.nRidge.fbm(x / 9000 + 31.4, z / 9000 - 12.9, 2));
     // The northern range behind the castle.
-    const rz = z + 700 * ns.fbm(x / 2600 + 4.4, 0.37, 3);
-    mm = Math.max(mm, smoothstep(-2900, -4300, rz) * smoothstep(-8600, -6400, rz) * (1 - smoothstep(5000, 9000, Math.abs(x + 900 * ns.sample(z / 3000, 7.7)))));
+    // (in the vale's own frame, so it always rises behind the castle)
+    const rz = lz + 700 * ns.fbm(lx / 2600 + 4.4, 0.37, 3);
+    mm = Math.max(mm, smoothstep(-2900, -4300, rz) * smoothstep(-8600, -6400, rz) * (1 - smoothstep(5000, 9000, Math.abs(lx + 900 * ns.sample(lz / 3000, 7.7)))));
     if (mm > 0) {
       const pass = smoothstep(-0.35, 0.25, ns.fbm(x / 1700 - 9.3, z / 1700 + 2.2, 2));
       h += mm * (60 + 520 * this.nRidge.ridged(wx / 1500, wz / 1500, 4) * (0.35 + 0.65 * pass));
@@ -107,7 +172,7 @@ export class MacroField {
     return h;
   }
 
-  /** The authored vale composition (valid where `anchorWeight` > 0). */
+  /** The authored vale composition, in authored coordinates (valid where the anchor weight > 0). */
   valeHeight(x: number, z: number): number {
     const p = this.params;
     const nd = this.nDetail;

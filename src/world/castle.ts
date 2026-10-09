@@ -18,7 +18,9 @@ export function localToWorld(lx: number, lz: number, yaw: number, ox = 0, oz = 0
 export function planCastle(seed: string, macro: MacroField): CastlePlan {
   const rng = new Rng(deriveSeed(seed, 'castle/v1'));
   const p = macro.params;
-  return planCastleAt({ id: `${seed}/castle/0`, rng, x: p.castleX, z: p.castleZ, radius: p.plateauRadius, yaw: rng.range(-0.12, 0.12), great: true, height: (x, z) => macro.height(x, z), name: castleName });
+  const c = macro.castle;
+  // The gate faces down the valley towards the spawn, whichever way the vale lies.
+  return planCastleAt({ id: `${seed}/castle/0`, rng, x: c.x, z: c.z, radius: p.plateauRadius, yaw: macro.yawToWorld(rng.range(-0.12, 0.12)), great: true, height: (x, z) => macro.height(x, z), name: castleName });
 }
 
 export interface CastleSiteOptions {

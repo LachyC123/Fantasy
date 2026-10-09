@@ -9,6 +9,7 @@ import { buildStructures } from '../src/world/structures';
 import { MaterialLibrary } from '../src/rendering/materials';
 import { maxRoadGrade } from '../src/world/roads';
 import { obbSamples } from '../src/world/geometry2d';
+import { MacroField } from '../src/world/macro';
 
 const plan = generateWorldPlan(REFERENCE_SEED);
 const terrain = createTerrain(plan);
@@ -32,14 +33,39 @@ describe('world plan determinism', () => {
     const layoutA = plan.buildings.map((b) => `${b.kind}:${b.x.toFixed(1)}:${b.z.toFixed(1)}:${b.wallStyle}:${b.roof}`).join('|');
     const layoutB = other.buildings.map((b) => `${b.kind}:${b.x.toFixed(1)}:${b.z.toFixed(1)}:${b.wallStyle}:${b.roof}`).join('|');
     expect(layoutA).not.toBe(layoutB);
-    // Composition constraints: castle north of the spawn, hamlet between them.
+    // Composition constraints, in the vale's own frame: castle up the valley, hamlet between it and the spawn.
     for (const p of [plan, other]) {
+      const m = new MacroField(p.seed);
       const h = p.settlements.find((s) => s.kind === 'hamlet')!;
-      expect(p.castle.z).toBeLessThan(h.z);
-      expect(h.z).toBeLessThan(p.spawn.z);
+      const lc = m.toLocal(p.castle.x, p.castle.z).z;
+      const lh = m.toLocal(h.x, h.z).z;
+      expect(lc).toBeLessThan(lh);
+      expect(lh).toBeLessThan(m.toLocal(p.spawn.x, p.spawn.z).z);
     }
     expect(hamletA.id).toBe(hamletB.id);
   });
+
+  it('turns, mirrors and stretches the opening vale per seed (the reference stays as authored)', () => {
+    expect(new MacroField(REFERENCE_SEED).frame).toEqual({ angle: 0, mirror: 1, sx: 1, sz: 1 });
+    const seeds = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const frames = seeds.map((s) => new MacroField(s).frame);
+    expect(new Set(frames.map((f) => f.angle.toFixed(3))).size).toBe(seeds.length);
+    expect(new Set(frames.map((f) => f.mirror)).size).toBe(2);
+    // The frame maps there and back exactly.
+    const m = new MacroField('a');
+    const w = m.toWorld(123, -456);
+    const l = m.toLocal(w.x, w.z);
+    expect(l.x).toBeCloseTo(123, 6);
+    expect(l.z).toBeCloseTo(-456, 6);
+    // The spawn still faces its castle, wherever that is; the vale gets its own name.
+    const plans = ['a', 'b'].map((s) => generateWorldPlan(s));
+    for (const p of plans) {
+      const dx = p.castle.x - p.spawn.x;
+      const dz = p.castle.z - p.spawn.z;
+      expect(Math.cos(Math.atan2(-dx, -dz) - p.spawn.yaw)).toBeGreaterThan(0.999);
+      expect(p.regionName).not.toBe(plan.regionName);
+    }
+  }, 30000);
 
   it('gives every building a distinct identity, not copies', () => {
     const recipes = new Set(plan.buildings.map((b) => `${b.width.toFixed(2)}x${b.depth.toFixed(2)}:${b.floors}:${b.wallStyle}:${b.upperStyle}:${b.roof}:${b.roofPitch.toFixed(2)}`));

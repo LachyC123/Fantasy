@@ -5,18 +5,22 @@
  * lost). State lives for the journey; persistent saves arrive with Milestone 4.
  */
 import * as THREE from 'three';
-import { deriveSeed } from '../core/rng';
+import { deriveSeed, Rng } from '../core/rng';
 import { MeshBuilder, col } from '../assets/geo';
 import { buildWeapon } from '../assets/weaponMesh';
-import { generateWeapon, type WeaponGenome } from './weapons';
+import { generateWeapon, type WeaponClass, type WeaponGenome } from './weapons';
 import { RARITY_COLOURS } from './luck';
 import type { MaterialLibrary } from '../rendering/materials';
 import type { TerrainLike } from '../world/terrain';
 import type { PropPlan, WeaponFind } from '../world/types';
 import type { WeaponRef } from './save';
 
+/** The plain arms a journey can begin with (the reference seed always starts with a longsword). */
+const STARTER_CLASSES: WeaponClass[] = ['longsword', 'shortsword', 'sabre', 'falchion', 'axe', 'mace', 'spear', 'dagger'];
+
 export function starterWeapon(seed: string): WeaponGenome {
-  return generateWeapon(deriveSeed(seed, 'loot/starter'), { id: `${seed}/weapon/starter`, cls: 'longsword', rarity: 'common', materials: ['steel', 'iron'] });
+  const cls = seed === 'reference-valley' ? 'longsword' : new Rng(deriveSeed(seed, 'loot/starter-class')).pick(STARTER_CLASSES);
+  return generateWeapon(deriveSeed(seed, 'loot/starter'), { id: `${seed}/weapon/starter`, cls, rarity: 'common', materials: ['steel', 'iron'] });
 }
 
 export function findWeapon(find: WeaponFind): WeaponGenome {

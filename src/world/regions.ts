@@ -16,7 +16,7 @@ import { castleName, keepName, villageName, towerName, stonesName, shrineName, c
 /** Region edge length in metres. */
 export const REGION = 1024;
 /** Cells owned by the opening vale (inclusive). */
-export const VALE_CELLS = { rx0: -2, rx1: 1, rz0: -2, rz1: 0 };
+export const VALE_CELLS = { rx0: -2, rx1: 1, rz0: -2, rz1: 1 };
 export const VALE_BOUNDS: Bounds = {
   x0: VALE_CELLS.rx0 * REGION,
   z0: VALE_CELLS.rz0 * REGION,

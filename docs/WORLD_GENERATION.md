@@ -25,13 +25,31 @@ about 1.6 km to the north.
 
 The world has two layers:
 
-- **The opening vale**: an authored composition with seeded variation (the first 4 × 3 km).
+- **The opening vale**: an authored composition, shaped differently by every seed (a 4 × 4 km block).
 - **The open world** around it: an endless grid of 1 km procedural regions. Each region is planned
   from `(seed, rx, rz)` alone, so it does not matter which region is generated first, or on which
   thread. There is no path to follow; roads branch in every direction, and some places sit off
   every road.
 
 ## The vale (`src/world/plan.ts`)
+
+**The vale frame.** The composition is authored in its own coordinates: the spawn near the
+origin, the valley running up along −Z, the castle at its head. Each seed draws a frame from
+`terrain/frame` (`MacroField.frame`) that maps those coordinates into the world:
+
+- **turned** to any heading (0–360°), so the castle can lie in any direction from the spawn;
+- **mirrored** half the time (the road's bends and the hills swap sides);
+- **stretched** 0.85–1.25× across the valley and 0.8–1.08× along it;
+- with the castle shifted −170…+210 m across the valley, the meander 0.4–1.5× as strong, the
+  valley walls 0.75–1.3× as high and the crag 0.85–1.15× as tall.
+
+The layout stream `vale/layout` then sets how far up the valley the hamlet sits (760–1000 m), the
+farm 220–290 m before it, the hamlet's size (6–12 buildings) and the number of lone cottages
+(2–6). The vale's name and your first weapon (a common longsword, shortsword, sabre, falchion,
+axe, mace, spear or dagger) are also drawn per seed. Everything that reads the anchor (heights,
+the vale's forests, the castle, every authored road control point and plot) goes through
+`toWorld` / `toLocal`. **`reference-valley` keeps the identity frame and the authored defaults**,
+so its layout is the regression and screenshot baseline.
 
 1. **Macro geography** (`macro.ts`): continuous height in metres from domain-warped simplex fBm.
    The opening region is an authored anchor with seeded variation:
@@ -64,10 +82,10 @@ The world has two layers:
      the road; the barn and shed flank the yard. Fields are laid out in a loose grid aligned with
      the farm; each is rejected if it touches a road, a building or steep ground. Hedges, fences
      or dry-stone walls run along field edges.
-   - **Hamlet** strung along the Vale Road. Plots alternate sides at about 18 m intervals. Each
+   - **Hamlet** (6–12 buildings by seed; 9 in the reference) strung along the Vale Road. Plots alternate sides at about 18 m intervals. Each
      building faces the road with a 3–6.5 m setback. Plots are rejected on overlap, road
-     intrusion or slope. A well sits on the green and a signpost at the entrance.
-   - **Lone cottages** (up to 4), chosen by candidate scoring: they must be 70–260 m from the road
+     intrusion or slope. A well sits on the green and a signpost beyond the last house, on whichever verge is clear.
+   - **Lone cottages** (2–6 by seed; 4 in the reference), chosen by candidate scoring: they must be 70–260 m from the road
      and away from other sites. Each gets its own track. A cottage is rolled back if its track
      would cross a field, fence, building or ruin.
    - **Roadside dry-stone walls.** Walls break at hairpins, at other roads and near props.
@@ -86,7 +104,8 @@ The world has two layers:
    towards the castle. Trees are excluded from a corridor that widens by 0.11 m per metre. This is
    the planned "framed reveal" of reference B.
 8. **Exits and side places:**
-   - The vale owns cells x −2…1, z −2…0 of the region grid.
+   - The vale owns cells x −2…1, z −2…1 of the region grid: a square block, so a vale turned any
+     way still fits inside it.
    - Every gate on its border gets a trade road, routed to the Vale Road network.
    - Up to seven side places (towers, stone rings, shrines, camps, a cottage) are scattered on its
      outer hills, away from the authored core; about 60% get a footpath.

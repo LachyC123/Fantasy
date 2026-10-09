@@ -6,7 +6,7 @@ Only content that **actually exists in the code** is listed. Everything is gener
 
 | Name | Status |
 | --- | --- |
-| The Vale of Unwritten Days (opening anchor region) | Implemented: forested ridge, valley meadows, copses, the castle crag, hills, blue mountains. Its palette follows the brief's *Golden Weald*. |
+| The opening vale (*The Vale of Unwritten Days* in `reference-valley`; named per seed) | Implemented, turned, mirrored and stretched per seed: forested ridge, valley meadows, copses, the castle crag, hills, blue mountains. Its palette follows the brief's *Golden Weald*. |
 | The open world (endless 1 km regions) | Implemented: lowlands, uplands, mountain ranges with passes, a northern range behind the vale; great woods and copses; regional character (pine country, birch heaths). Every region is named (e.g. *the Ashen Downs*) and has a fortune that shifts its loot |
 | Other biomes (Weeping Fen, Violet Marches, …), water | Planned (Milestone 3+) |
 
@@ -96,7 +96,7 @@ logs, mushrooms and stumps.
 
 - 12 classes, 10 materials, 16 boons, 6 banes, 7 craft conditions and 6 rarities.
 - Every weapon has its own generated mesh, stats, name and (for rare+) lore.
-- In the world: a seeded common starting longsword, plus five finds (watchtower rubble, waystone
+- In the world: a seeded common starting weapon (a longsword in `reference-valley`; otherwise one of eight plain classes), plus five finds (watchtower rubble, waystone
   offering, before the castle gate, against the barn, in a chopping block).
 
 ## Procedural creatures (developer gallery only)

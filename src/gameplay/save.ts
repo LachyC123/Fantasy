@@ -10,7 +10,8 @@ import type { SitePlan, WeaponFind } from '../world/types';
 export type WeaponRef = { kind: 'starter' } | { kind: 'find'; id: string; seed: number; luck: number; cls?: WeaponFind['cls'] };
 
 export interface JourneySave {
-  format: 1;
+  /** 2 since v0.7: opening vales are shaped per seed, so earlier positions no longer fit. */
+  format: 2;
   generatorVersion: number;
   seed: string;
   savedAt: string;
@@ -44,7 +45,7 @@ export function readSave(): JourneySave | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as JourneySave;
     // A save from another generator version would describe a different world.
-    if (s.format !== 1 || s.generatorVersion !== GENERATOR_VERSION || typeof s.seed !== 'string') return null;
+    if (s.format !== 2 || s.generatorVersion !== GENERATOR_VERSION || typeof s.seed !== 'string') return null;
     return s;
   } catch {
     return null;

@@ -324,7 +324,7 @@ export class Game {
     const ws = w.snapshot();
     const ex = this.exploration.snapshot();
     writeSave({
-      format: 1,
+      format: 2,
       generatorVersion: w.plan.generatorVersion,
       seed: w.seed,
       savedAt: new Date().toISOString(),

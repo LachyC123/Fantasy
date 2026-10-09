@@ -87,6 +87,11 @@ describe('procedural weapons', () => {
     const s = starterWeapon(REFERENCE_SEED);
     expect(s.cls).toBe('longsword');
     expect(s.rarity).toBe('common');
+    // Other journeys begin with other plain arms, always common.
+    const starts = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((x) => starterWeapon(x));
+    expect(new Set(starts.map((w) => w.cls)).size).toBeGreaterThan(2);
+    for (const w of starts) expect(w.rarity).toBe('common');
+    expect(starterWeapon('a').name).toBe(starterWeapon('a').name);
     const plan = generateWorldPlan(REFERENCE_SEED);
     expect(plan.finds.length).toBeGreaterThanOrEqual(4);
     const a = plan.finds.map((f) => findWeapon(f).name);

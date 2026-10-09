@@ -70,6 +70,13 @@ export function regionName(rng: Rng): string {
   return `the ${rng.pick(REGION_ADJ)} ${rng.pick(REGION_NOUN)}`;
 }
 
+/** The opening vale's name (every journey starts in one). */
+export function valeName(rng: Rng): string {
+  const form = rng.pick(['Vale', 'Vale', 'Dale', 'Glen', 'Hollow', 'Combe']);
+  const of = rng.pick(['Unwritten Days', 'Quiet Bells', 'the Last Lantern', 'Folded Maps', 'Morrow', 'Long Shadows', 'the Patient Crown', 'Ash and Clover', 'Lost Hours', 'the Low Sun', 'Ravens Asleep', 'Small Mercies']);
+  return `The ${form} of ${of}`;
+}
+
 export function keepName(rng: Rng): string {
   return `${rng.pick(['Fort', 'the Keep of', 'Castle', 'the Hold of'])} ${rng.pick(PREFIX)}${rng.pick(['gard', 'mont', 'hold', 'crag', 'helm', 'bury'])}`;
 }

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.0: Every vale is different
+
+**Changed**
+- The opening vale is no longer the same composition for every seed. Each seed:
+  - turns the whole vale to any heading, so the castle can stand in any direction from where you
+    wake, and mirrors it half the time;
+  - stretches it (0.85–1.25× wide, 0.8–1.08× long), shifts the castle across the valley, and
+    varies the meander, the height of the valley walls and the crag;
+  - places the hamlet 760–1000 m up the valley with 6–12 buildings, the farm before it, and 2–6
+    lone cottages;
+  - names the vale (*The Glen of Quiet Bells*, *The Hollow of Lost Hours*, …);
+  - hands you a different plain starting weapon (longsword, shortsword, sabre, falchion, axe,
+    mace, spear or dagger).
+- The structure stays the same: forest-edge spawn facing the castle, the road down the valley
+  through farm and hamlet, switchbacks up to the castle on its crag.
+- `reference-valley` keeps the authored layout exactly (the frame is the identity), so screenshots
+  and regression tests have a fixed baseline.
+- The vale now owns a 4 × 4 km block (cells z −2…1), so it fits whichever way it is turned. This
+  gives the reference vale a different set of exits and side places on its outskirts.
+- The hamlet's signpost stands beyond the last house, on a verge clear of buildings (a large
+  hamlet could put it in front of a door).
+- Saves are now format 2. Saves from 0.6 are ignored, since their positions belong to differently
+  shaped vales.
+
 ## 0.6.0: Journeys are saved
 
 **Added**

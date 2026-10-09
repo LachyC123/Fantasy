@@ -3,7 +3,9 @@
 A first-person fantasy exploration game for the browser, with a painterly, pixelated look. Every
 world grows from a seed. You wake beneath an ancient tree at the edge of a forest. Below you lies a
 green vale with a winding road, farms and a hamlet. An enormous Gothic castle rises on the horizon.
-Beyond the vale, the world goes on without end and differs for every seed.
+Every seed shapes that vale its own way (which way it runs, where the castle stands, how big the
+hamlet is, the vale's name and the weapon you start with), and beyond it the world goes on without
+end, different for every seed. `reference-valley` keeps the reference layout.
 
 **Current state: Milestone 1, plus three later additions:**
 

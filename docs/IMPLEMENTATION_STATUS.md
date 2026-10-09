@@ -14,6 +14,7 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Project, scripts, strict TypeScript, production build | **implemented** | `npm run build` is clean |
 | Deterministic seeds (namespaced streams, generator version) | **implemented** | unit-tested |
 | World plan: valley, castle crag, roads, farm, hamlet, ruin, cottages, walls, props | **implemented** | the opening vale, with exits and side places |
+| Per-seed vale layout (heading, mirroring, proportions, castle offset, hamlet/farm placement and size, cottage count, name, starting weapon) | **implemented** | `reference-valley` keeps the authored layout |
 | Open procedural world: endless 1 km regions, gates, A* road network, 8 site kinds, fortune | **implemented** | determinism, gates and validation unit-tested; browser-tested |
 | Countryside terrain beyond the vale (lowlands, uplands, ranges with passes), regional forests | **implemented** | no distinct biomes (fen, marches) or water yet |
 | Villages (church, inn, houses, lanterns, well), hill keeps, standing stones, shrines, camps | **implemented** | exteriors only |
@@ -53,9 +54,9 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Suite | Command | Result |
 | --- | --- | --- |
 | Typecheck and build | `npm run build` | clean |
-| Unit and generation tests | `npm test` | **68 / 68 passed** (9 files; the streaming benchmark runs last, on its own: p50 3.0 ms, p95 6.9 ms, max 11.4 ms) |
+| Unit and generation tests | `npm test` | **69 / 69 passed** (9 files; the streaming benchmark runs last, on its own: p50 3.0 ms, p95 7.4 ms, max 10.6 ms) |
 | World validation sweep | `npx vite-node scripts/validate.ts -- 40` | **40 / 40 seeds valid** |
-| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **10 / 10 passed** in 10.7 min |
+| Browser tests (Chromium, SwiftShader) | `npm run test:e2e` | **10 / 10 passed** in 11.2 min |
 
 Browser test durations (latest full run):
 
@@ -119,6 +120,8 @@ All screenshots are real captures from the production build at 1280×720, made w
 | `18-inn-taproom.png` | Inside the taproom: hearth, counter and the innkeeper turning to greet you |
 | `19-inn-loft.png` | The loft: beds, the chimney stack, the roof timbers |
 | `20-villager.png` | A villager strolling the hamlet's cobbled street towards the castle |
+| `21-seed-gloam-vista.png` | Seed `gloam`: the vale turned to face west, an axe as the starting weapon |
+| `22-seed-3-vista.png` | Seed `seed-3`: the vale turned and mirrored to face east, a curved blade to start |
 
 In shots 09 and 10 the castle's arrival banner is still on screen. It is the real banner, which
 lasts 5 seconds of game time; at software-rendering frame rates it outlasts the capture wait.
