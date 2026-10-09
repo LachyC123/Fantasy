@@ -24,6 +24,7 @@ if (!webglAvailable()) {
     autotest: params.has('autotest'),
     seed: params.get('seed'),
     debug: params.has('debug'),
+    gallery: params.has('gallery'),
   });
   (window as unknown as { __hollowAtlas: unknown }).__hollowAtlas = game.testApi;
   window.addEventListener('error', (e) => game.errors.push(String(e.message)));

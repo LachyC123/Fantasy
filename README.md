@@ -4,7 +4,10 @@ A first-person fantasy exploration game for the browser, with a painterly, pixel
 world grows from a seed. You wake beneath an ancient tree at the edge of a forest. Below you lies a
 green vale with a winding road, farms and a hamlet. An enormous Gothic castle rises on the horizon.
 
-**Current state: Milestone 1, "Beautiful playable first valley".** See
+**Current state: Milestone 1, "Beautiful playable first valley", plus the procedural arsenal and
+bestiary foundation.** There is a nearly unlimited supply of generated weapons, with heavy-tailed
+luck, five finds in the vale and creatures in the developer gallery; see
+[docs/PROCEDURAL_CONTENT.md](docs/PROCEDURAL_CONTENT.md). Also see
 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for what works and what does not yet.
 
 ![Forest-edge vista towards the castle](docs/screenshots/01-spawn-vista.png)
@@ -33,6 +36,7 @@ click **Click to explore** to capture the mouse.
 | --- | --- |
 | `?seed=reference-valley` | Pre-fills and pre-builds this seed. `reference-valley` is the fixed reference seed used for screenshots. |
 | `?autotest` | Test mode: skips the intro and the pointer-lock requirement, and keeps the canvas readable for pixel checks. |
+| `?gallery` | **Developer gallery** of procedurally generated creatures and weapons on a stage in the vale (← → to browse without end, R random, Tab to switch, luck slider). |
 
 ## Controls
 
@@ -42,8 +46,9 @@ click **Click to explore** to capture the mouse.
 | Mouse | Look (after clicking **Click to explore**) |
 | Shift | Run |
 | Space | Jump |
-| Left click | Swing sword (there are no enemies yet; combat is Milestone 5) |
-| E | Read signposts, examine the waystone, look into the well |
+| Left click | Swing your weapon (there are no enemies yet; combat is Milestone 5) |
+| E | Read signposts, examine the waystone, look into the well, **take a weapon** |
+| I | Show the card of the weapon in your hand |
 | Esc | Release the mouse and pause |
 | F3 | Debug overlay (FPS, draw calls, streaming, colliders, validation) |
 
@@ -87,6 +92,7 @@ software WebGL.
 | [docs/MILESTONES.md](docs/MILESTONES.md) | The ten milestones and their acceptance gates |
 | [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Implemented / prototype / planned, with test results |
 | [docs/CONTENT_CATALOG.md](docs/CONTENT_CATALOG.md) | Every asset, site and interaction that actually exists |
+| [docs/PROCEDURAL_CONTENT.md](docs/PROCEDURAL_CONTENT.md) | Procedural weapons and creatures, the luck model, the developer gallery |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Reproducible problems and limitations |
 | [docs/TESTING.md](docs/TESTING.md) | How tests, browser runs and visual reviews are done |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Changes per milestone |

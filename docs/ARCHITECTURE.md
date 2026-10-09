@@ -49,6 +49,21 @@ player/
   collision.ts              CollisionWorld (grid-indexed boxes/circles + streamed trunks)
   controller.ts             CharacterController (capsule, slopes, step-up, jump)
   viewModel.ts              first-person sword + hands geometry and procedural animation
+gameplay/
+  luck.ts                   shared rarity/condition model with heavy tails
+  weapons.ts                weapon genome (shape, material, affixes, stats, names)
+  creatures.ts              creature genome (body plan, mutations, moves, stats, names)
+  loot.ts                   starter weapon, weapon finds in the world, swap-on-take
+world/ (generation in workers)
+  genCore.ts                everything needed to generate data for a seed (no scene objects)
+  genWorker.ts              Web Worker answering terrain/vegetation jobs with typed arrays
+  genPool.ts                worker pool with priority queue, cancellation, inline fallback
+  vegPack.ts                per-chunk vegetation jobs and instance packing
+assets/ (procedural meshes)
+  weaponMesh.ts             parametric weapon meshes
+  creatureMesh.ts           parametric creature meshes
+app/
+  gallery.ts                developer gallery of creatures and weapons (?gallery)
 ambient/
   birds.ts                  instanced flocks orbiting landmarks
   particles.ts              chimney smoke and ambient motes/leaves (pooled points)
@@ -105,8 +120,14 @@ generated and validated in Node or a worker.
   - The chunk cache is bounded at 2,600 chunks.
 - **Static structures:** batched per material at load (about 25 draw calls). The castle is always
   present as the long-range landmark.
-- Chunks are generated on the main thread under a budget. Moving generation to a Web Worker is
-  planned for Milestone 3.
+- **Generation runs in Web Workers** (`GenPool`; one fewer worker than CPU cores, between 1 and 4).
+  - Each worker rebuilds the deterministic `GenCore` from the seed and answers jobs (terrain
+    nodes, tree, ground and grass chunks) with transferable typed arrays.
+  - The main thread only wraps the arrays in geometry and uploads them.
+  - Jobs are ranked by size and distance; stale ones are dropped when the camera moves.
+  - Without worker support, the same jobs run inline under a time budget.
+- Vegetation batches are re-uploaded only when the set of chunks feeding them changes. Each batch
+  has a signature, so the upload covers only the used instance range.
 
 ## Collision
 

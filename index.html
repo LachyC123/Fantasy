@@ -141,6 +141,22 @@
         </div>
       </section>
 
+      <!-- Developer gallery (?gallery): procedural creatures and weapons -->
+      <section id="gallery" hidden aria-label="Developer gallery">
+        <p class="gallery-label">Developer gallery — generated specimens. Creatures are not placed in the world yet (combat and AI arrive in Milestone 5).</p>
+        <div class="gallery-tabs">
+          <button data-gallery="creatures">Creatures</button>
+          <button data-gallery="weapons">Weapons</button>
+        </div>
+        <div class="gallery-nav">
+          <button data-gallery="prev" title="Previous (←)">← Prev</button>
+          <button data-gallery="random" title="Random (R)">Random</button>
+          <button data-gallery="next" title="Next (→)">Next →</button>
+        </div>
+        <label class="gallery-luck">Luck <input id="gallery-luck" type="range" min="-3" max="4" step="0.5" value="0" /> <output id="gallery-luck-out">0.0</output></label>
+        <div class="gallery-card"></div>
+      </section>
+
       <pre id="debug" hidden></pre>
       <div id="error" hidden></div>
     </div>

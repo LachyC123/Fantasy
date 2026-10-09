@@ -22,13 +22,16 @@ import { damp, clamp } from '../core/math';
 import { starterWeapon } from '../gameplay/loot';
 import { RARITY_COLOURS } from '../gameplay/luck';
 import type { WeaponGenome } from '../gameplay/weapons';
+import { Gallery } from './gallery';
 
-type State = 'boot' | 'title' | 'loading' | 'intro' | 'capture' | 'playing' | 'paused';
+type State = 'boot' | 'title' | 'loading' | 'intro' | 'capture' | 'playing' | 'paused' | 'gallery';
 
 export interface GameOptions {
   autotest: boolean;
   seed: string | null;
   debug: boolean;
+  /** Developer gallery of generated creatures and weapons. */
+  gallery: boolean;
 }
 
 export class Game {
@@ -46,6 +49,7 @@ export class Game {
   world: WorldRuntime | null = null;
   player: CharacterController | null = null;
   private guidance: Guidance | null = null;
+  private gallery: Gallery | null = null;
   /** The weapon in hand (procedurally generated). */
   weapon: WeaponGenome | null = null;
   private readonly sun = new THREE.DirectionalLight();
@@ -148,6 +152,12 @@ export class Game {
       if (this.state === 'loading') this.ui.setProgress(f, stage);
     }).then(() => {
       if (this.state === 'title') this.ui.setTitleStatus('', true);
+      if (this.opts.gallery && this.world) {
+        this.state = 'gallery';
+        this.ui.show(null);
+        this.gallery = new Gallery(this.world, this.materials);
+        this.scene.add(this.gallery.group);
+      }
     });
     this.renderer.setAnimationLoop(() => this.frame());
   }
@@ -452,6 +462,13 @@ export class Game {
         this.pitch = 0.04 + Math.sin(this.time * 0.07) * 0.03;
       }
       if (this.state === 'playing') this.updatePlayer(dt);
+      if (this.state === 'gallery' && this.gallery) {
+        const cam = this.gallery.camera(dt);
+        p.teleport(cam.pos.x, cam.pos.z, cam.pos.y - PLAYER.eye);
+        const d = cam.target.clone().sub(cam.pos);
+        this.yaw = Math.atan2(-d.x, -d.z);
+        this.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+      }
       if (this.autopilot) this.stepAutopilot(dt);
       // Camera.
       this.eyeOffset += (0 - this.eyeOffset) * damp(14, dt);
@@ -622,7 +639,7 @@ export class Game {
       this.pipeline.render(this.inspectScene, this.camera, { scene: this.viewModel.scene, camera: this.viewModel.camera }, atmosphereUniforms.uSunDir.value, atmosphereUniforms.uSunColor.value);
       return;
     }
-    const showView = this.state === 'playing' || this.state === 'capture' || this.state === 'paused' || (this.state === 'intro' && this.stateTime > 4.6);
+    const showView = this.state !== 'gallery' && (this.state === 'playing' || this.state === 'capture' || this.state === 'paused' || (this.state === 'intro' && this.stateTime > 4.6));
     this.pipeline.render(this.scene, this.camera, showView ? { scene: this.viewModel.scene, camera: this.viewModel.camera } : null, atmosphereUniforms.uSunDir.value, atmosphereUniforms.uSunColor.value);
   }
 
@@ -680,6 +697,15 @@ export class Game {
       setTimeOfDay: (t: Settings['timeOfDay']) => this.applySettings({ ...this.settings, timeOfDay: t }),
       setSettings: (s: Partial<Settings>) => this.applySettings({ ...this.settings, ...s }),
       validation: () => this.world?.validation,
+      gallery: () => (this.gallery ? { mode: this.gallery.mode, index: this.gallery.index, current: this.gallery.current } : null),
+      galleryAction: (a: string) => this.gallery?.action(a),
+      gallerySet: (mode: 'creatures' | 'weapons', index: number, luck = 0) => {
+        if (!this.gallery) return;
+        this.gallery.mode = mode;
+        this.gallery.index = index;
+        this.gallery.luck = luck;
+        this.gallery.show();
+      },
       stats: () => ({
         fps: this.fpsAvg,
         frameMs: this.frameMs,

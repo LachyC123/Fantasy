@@ -20,6 +20,8 @@ npm test
 | --- | --- |
 | `tests/core.test.ts` | Seed canonicalisation; hash stability and spread; namespaced streams are independent; `Rng` is reproducible and uniform; noise is deterministic and bounded |
 | `tests/world.test.ts` | The same seed gives an identical plan; another seed gives a different layout under the same anchor composition; every building has its own recipe; adjacent terrain nodes share exact border heights and normals (**no seams**); buildings sit on their pads; the castle summit is flat and the spawn walkable; roads reach the castle gate and the spawn within grade limits; terrain is graded to the road crown; trees, ground cover and grass scatter **identically whatever the chunk size or load order**; no trees on roads or the castle summit; the spawn sightline stays clear; **full spatial validation passes for 8 seeds** |
+| `tests/weapons.test.ts` | Weapons are deterministic; rarity matches the odds (±5σ, including the mythic tail); luck shifts the odds both ways; 5,000 of 5,000 shapes are distinct; stats and names are sane for every class; finite meshes for every class; the starter weapon and finds are deterministic per seed |
+| `tests/creatures.test.ts` | Creatures are deterministic; tier odds, including a rare mythic tail; danger scales with tier; champions are named; 4,000 of 4,000 forms are distinct; biome and plan constraints hold; only armed plans carry weapons; finite meshes for every plan and tier |
 | `tests/controller.test.ts` | Box push-out; walk and sprint speeds; yaw-relative movement; walls block and the player slides along them; step-up onto 0.4 m stones but not 1.1 m blocks; jumping and landing; the steep-slope limit (gentle slopes stay climbable); the reference spawn is grounded and the footpath walkable |
 
 Wider seed sweep (also builds every collider):
@@ -44,6 +46,7 @@ the intro and pointer lock and keeps the canvas readable.
 | `e2e/smoke.spec.ts`: title | The title renders a non-blank frame (mean luminance and colour-count thresholds); Settings change and persist to localStorage; Esc closes panels; Credits opens and closes; no console or page errors |
 | `e2e/smoke.spec.ts`: journey | New Journey → Begin reaches gameplay; the real **W** key moves the player; **Space** leaves and regains the ground; a click starts a sword swing; standing at the junction signpost shows the *Read signpost* prompt and **E** shows its text; **Esc** pauses and **Resume** continues; Return to Title works; world validation is clean; no errors |
 | `e2e/smoke.spec.ts`: collision | Walking into a hamlet cottage for 4 s never puts the player inside the wall |
+| `e2e/gallery.spec.ts` | `?gallery` loads; next, prev, tab and keyboard navigation change the specimen; the frame is not blank; no errors |
 | `e2e/streaming.spec.ts` | Autopilot travels the footpath and then the whole Vale Road to the castle gate at a fixed 5 m per frame (deliberate worst case). It asserts world-streaming CPU p95 < 16 ms and max < 120 ms per frame, a bounded geometry count (no leak), arrival at the gate, a non-blank final frame and no errors |
 
 ## 4. Visual review

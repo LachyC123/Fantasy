@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0: Procedural arsenal and bestiary foundation
+
+**Added**
+- Shared luck model: rarity odds from common (62%) to mythic (1 in 2,000), a fat-tailed craft
+  condition from ruined to flawless, a luck bias, and cursed rolls.
+- Weapon genome and parametric meshes: 12 classes, 10 materials, 16 boons, 6 banes, derived
+  stats, names, titles and lore.
+- A seeded starting weapon and five story-placed finds with local luck. E swaps (nothing is lost);
+  I shows the weapon card; rarity glints mark finds.
+- Creature genome and parametric meshes: 8 body plans, 16 mutations, 4 threat tiers, moves,
+  temperament, stats and carried weapons.
+- Developer gallery (`?gallery`) for browsing unlimited specimens with a luck slider.
+- World generation moved to a Web Worker pool, and vegetation batches upload only on change.
+- Tests: weapon and creature determinism, odds, variety, meshes, finds and reachability; a gallery
+  browser test.
+
 ## 0.1.0: Milestone 1, "Beautiful playable first valley"
 
 **Added**

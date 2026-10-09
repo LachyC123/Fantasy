@@ -74,11 +74,25 @@ logs, mushrooms and stumps.
 - Motes in the light and falling leaves in the forest.
 - Wind on foliage and grass.
 
+## Procedural weapons (see PROCEDURAL_CONTENT.md)
+
+- 12 classes, 10 materials, 16 boons, 6 banes, 7 craft conditions and 6 rarities.
+- Every weapon has its own generated mesh, stats, name and (for rare+) lore.
+- In the world: a seeded common starting longsword, plus five finds (watchtower rubble, waystone
+  offering, before the castle gate, against the barn, in a chopping block).
+
+## Procedural creatures (developer gallery only)
+
+- 8 body plans, 10 coverings, 16 mutations and 4 threat tiers.
+- Generated moves, temperament, stats and names; armed plans carry generated weapons.
+- Not placed in the world until Milestone 5.
+
 ## Interactions (E)
 
 - Read the junction signpost and the hamlet signpost (they point at real places).
 - Examine the waystone (a hint at a future mystery thread).
 - Look into the well.
+- Take a weapon find (it swaps with the weapon in your hand). **I** shows the weapon card.
 
 ## Audio (synthesised placeholders)
 
@@ -87,5 +101,6 @@ dirt and stone, sword whoosh, UI click.
 
 ## Not yet present (do not assume)
 
-NPCs, creatures and enemies, combat hits, items and inventory, the Atlas UI, saves, interiors,
-water, rivers, dungeons, quests.
+NPCs; creatures in the world (they exist only in the gallery); combat hits (weapon stats are not
+yet used); inventory beyond the weapon in hand; the Atlas UI; saves; interiors; water and rivers;
+dungeons; quests.

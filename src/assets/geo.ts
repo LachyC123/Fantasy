@@ -175,11 +175,14 @@ export class MeshBuilder {
   }
 
   /** Append an arbitrary three.js geometry (indexed or not) with a transform and colour. */
-  geometry(key: MatKey, geo: THREE.BufferGeometry, m: THREE.Matrix4, color: THREE.Color | ((p: THREE.Vector3, n: THREE.Vector3) => THREE.Color), uvScale = 1): void {
+  /** `color: null` keeps the geometry's own vertex colours. */
+  geometry(key: MatKey, geo: THREE.BufferGeometry, m: THREE.Matrix4, color: THREE.Color | null | ((p: THREE.Vector3, n: THREE.Vector3) => THREE.Color), uvScale = 1): void {
     const g = geo.index ? geo.toNonIndexed() : geo;
     const pos = g.getAttribute('position') as THREE.BufferAttribute;
     const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
     const uv = g.getAttribute('uv') as THREE.BufferAttribute | undefined;
+    const own = g.getAttribute('color') as THREE.BufferAttribute | undefined;
+    const tmp = new THREE.Color();
     const bt = this.batch(key);
     _nm.getNormalMatrix(m);
     for (let i = 0; i < pos.count; i++) {
@@ -189,7 +192,7 @@ export class MeshBuilder {
       bt.pos.push(_v.x, _v.y, _v.z);
       bt.nrm.push(_n.x, _n.y, _n.z);
       bt.uv.push(uv ? uv.getX(i) * uvScale : _v.x, uv ? uv.getY(i) * uvScale : _v.y);
-      const c = typeof color === 'function' ? color(_v, _n) : color;
+      const c = color === null ? (own ? tmp.fromBufferAttribute(own, i) : tmp.setRGB(1, 1, 1)) : typeof color === 'function' ? color(_v, _n) : color;
       bt.col.push(c.r, c.g, c.b);
     }
     if (g !== geo) g.dispose();

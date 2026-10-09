@@ -46,6 +46,18 @@ The scene also includes a few items beyond the M1 scope, kept small: a walkable 
 with a climbable broken stair, readable signposts and waystone (E), place-name banners, bird
 flocks, chimney smoke and drifting motes and leaves.
 
+## Added at the user's request: procedural arsenal and bestiary foundation
+
+| Item | Result |
+| --- | --- |
+| Shared heavy-tailed luck model (rarity + condition, luck bias) | ✅ tested against the target odds |
+| Weapon genome: 12 classes, continuous shapes, materials, boons/banes, stats, names, lore | ✅ |
+| Parametric weapon meshes; equipped in the view model with per-family poses | ✅ |
+| Weapon finds in the vale (E to take/swap, I for the weapon card) | ✅ session-only until saves (M4) |
+| Creature genome: 8 body plans, mutations, moves, temperament, stats, tiers, carried weapons | ✅ |
+| Parametric creature meshes; developer gallery (`?gallery`) | ✅ |
+| Creatures in the world, AI and combat | planned (Milestone 5) |
+
 ## Milestone 2: Medieval village + castle approach (next)
 
 - A semantic village street and plot system with street-specific dressing: lanterns, signs,

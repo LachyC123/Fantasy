@@ -9,12 +9,12 @@ metres (press F3 to see your position).
 | --- | --- | --- |
 | L1 | No save/load. Continue and Load Journey are deliberately absent from the title menu, so there are no fake buttons. | M4 (IndexedDB) |
 | L2 | No interiors. Cottage doors are closed and have no prompt; the castle gate is shut (portcullis). | M2 (inn), later castle |
-| L3 | No NPCs, creatures or enemies. The sword swing has no hit detection. | M5, M7 |
-| L4 | No Atlas, items, chests or quests. | M4 |
+| L3 | No NPCs or enemies in the world; generated creatures can only be viewed in the developer gallery. Swings have no hit detection, and weapon stats are not used yet. | M5, M7 |
+| L4 | No Atlas, chests, inventory or quests. Weapons can be taken and swapped, but taken finds reset when a new journey starts. | M4 |
 | L5 | No water (rivers or lakes) yet. | M3 |
 | L6 | Beyond about 5 km the terrain is generic wilderness with trees but no sites. | M3 |
 | L7 | All audio is synthesised placeholder sound. | Later audio pass |
-| L8 | Chunk generation runs on the main thread under a 5 ms budget; there is no Web Worker yet. | M3 |
+| L8 | ~~Chunk generation on the main thread.~~ Moved to a Web Worker pool. Without worker support it falls back to inline generation under a 5 ms budget. | done |
 | L9 | Time of day is a static preset chosen in Settings; there is no day/night cycle yet. | Later |
 | L10 | No gamepad, touch or key remapping. | Later |
 
@@ -29,4 +29,5 @@ metres (press F3 to see your position).
 | I5 | The view-model hand is built from rounded primitives and has no finger animation. | Look at the bottom right | Acceptable for M1; a richer hand and arm rig comes with M5 combat. |
 | I6 | Pointer lock cannot be re-acquired straight after Esc in some browsers (a browser security rule). | Esc, then click Resume immediately | Resume goes through the *Click to explore* prompt, which always works. |
 | I7 | Headless software rendering runs at about 1–3 FPS, so browser tests take several minutes. | `npm run test:e2e` | Environment limitation, not a game bug. |
+| I9 | Generated creatures sometimes have awkward proportions (thin limbs, horns clipping) and no animation. | `?gallery`, browse | Acceptable for a generator preview; rigging and animation come with M5. |
 | I8 | Validation issues for unusual seeds are logged and shown in F3 but not shown to players. | – | Validation passes for 40/40 sampled seeds. A failing seed should be added to the test list. |
