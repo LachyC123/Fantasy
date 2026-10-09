@@ -300,6 +300,8 @@ export function populateCastle(ctx: SiteContext, s: SiteSeed, castle: CastlePlan
   const g = castle.gate;
   pushFind(cb, { id: `${s.id}/find-gate`, x: g.x + Math.sin(g.yaw) * 9 + rng.range(-2, 2), z: g.z + Math.cos(g.yaw) * 9, yaw: rng.range(0, 6.28), pose: 'stuck', seed: lootSeed(s, 1), luck: ctx.fortune + 1.4, story: 'Driven point-first into the earth before the shut gate.' });
   cb.c.clearings.push({ x: castle.x, z: castle.z, radius: castle.plateauRadius + 4 });
+  // Castles keep their slopes cleared (a field of view for the garrison, and for travellers).
+  cb.c.clearings.push({ x: castle.x, z: castle.z, radius: castle.plateauRadius + 110 });
   cb.c.sites.push({ id: s.id, kind: 'castle', name: castle.name, x: castle.x, z: castle.z, radius: castle.plateauRadius + 60 });
 }
 
@@ -314,7 +316,7 @@ export function populateStones(ctx: SiteContext, s: SiteSeed, connect: boolean):
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + rng.range(-0.08, 0.08);
     const rr = r + rng.range(-0.4, 0.4);
-    cb.c.props.push({ id: `${s.id}/stone${i}`, kind: 'standing-stone', x: s.x + Math.sin(a) * rr, z: s.z + Math.cos(a) * rr, yaw: a + rng.range(-0.2, 0.2), scale: i < fallen ? -rng.range(0.8, 1.2) : rng.range(0.8, 1.6) });
+    cb.c.props.push({ id: `${s.id}/stone${i}`, kind: 'standing-stone', x: s.x + Math.sin(a) * rr, z: s.z + Math.cos(a) * rr, yaw: a + rng.range(-0.2, 0.2), scale: i < fallen ? -rng.range(1.0, 1.4) : rng.range(1.1, 1.9) });
   }
   if (connect) {
     const near = cb.nearestRoadPoint(s.x, s.z);
@@ -325,7 +327,7 @@ export function populateStones(ctx: SiteContext, s: SiteSeed, connect: boolean):
   }
   // At the heart of the ring: something left for whoever finds it. Old magic cuts both ways.
   pushFind(cb, { id: `${s.id}/find`, x: s.x, z: s.z, yaw: rng.range(0, 6.28), pose: 'lying', seed: lootSeed(s, 1), luck: ctx.fortune + rng.gaussian(0.3, 1.6), story: 'Laid at the heart of the stone ring. The air hums around it.' });
-  cb.c.clearings.push({ x: s.x, z: s.z, radius: r + 7 });
+  cb.c.clearings.push({ x: s.x, z: s.z, radius: r + 16 });
   addSite(cb, s, 'stones');
 }
 

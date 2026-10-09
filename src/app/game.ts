@@ -887,7 +887,7 @@ export class Game {
       },
       errorList: () => this.errors.slice(),
       weapon: () => this.weapon,
-      finds: () => this.world?.loot.finds.map((f) => ({ id: f.find.id, x: f.find.x, z: f.find.z, anchor: f.anchor.toArray(), name: f.weapon.title ?? f.weapon.name, rarity: f.weapon.rarity })),
+      finds: () => this.world?.loot.finds.map((f) => ({ id: f.find.id, x: f.find.x, z: f.find.z, pose: f.find.pose, anchor: f.anchor.toArray(), name: f.weapon.title ?? f.weapon.name, rarity: f.weapon.rarity })),
       equipSeed: (seed: number, luck = 0) => {
         void import('../gameplay/weapons').then((m) => this.equip(m.generateWeapon(seed, { luck })));
       },

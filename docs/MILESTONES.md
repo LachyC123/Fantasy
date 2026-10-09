@@ -6,9 +6,9 @@ The development plan from the brief (Section 60), tracked honestly. Status value
 | # | Milestone | Status |
 | --- | --- | --- |
 | 1 | Beautiful playable first valley | **complete**, awaiting review (see the acceptance table) |
-| 2 | Medieval village + castle approach | planned (next) |
-| 3 | Deterministic procedural landscape | planned; foundations exist (seeds, world-space terrain, streaming, LOD, validation) |
-| 4 | Hollow Atlas and discoveries | planned |
+| 2 | Medieval village + castle approach | **in progress**: procedural villages with churches, inns, lanterns and cobbled streets exist; the enterable inn, residents and the town street of reference A remain |
+| 3 | Deterministic procedural landscape | **in progress**: done ahead of order at the user's request — endless region grid, region road graph through gates, worker generation, 8 site archetypes, validation at region scale. Remaining: polished distinct biomes, rivers and lakes |
+| 4 | Hollow Atlas and discoveries | **in progress**: Atlas map with fog of war, discovery of every place, chests and the compass exist. Remaining: the altar pickup, survey viewpoints, notes, rumours, journal, saves |
 | 5 | Combat vertical slice | planned (sword swing animation only, no hit detection or enemies) |
 | 6 | First usable dungeon generator | planned |
 | 7 | Inhabited world | planned |
@@ -57,6 +57,22 @@ flocks, chimney smoke and drifting motes and leaves.
 | Creature genome: 8 body plans, mutations, moves, temperament, stats, tiers, carried weapons | ✅ |
 | Parametric creature meshes; developer gallery (`?gallery`) | ✅ |
 | Creatures in the world, AI and combat | planned (Milestone 5) |
+
+## Added at the user's request: an open, non-linear procedural world
+
+The user asked for exploration that is procedural and random rather than linear. This pulled
+forward parts of Milestones 2–4.
+
+| Item | Result |
+| --- | --- |
+| Endless world of 1 km regions planned from (seed, rx, rz), any order, any thread | ✅ unit-tested determinism |
+| The vale opens onto it: exits through gates, side places on its hills | ✅ |
+| Roads branch between regions through agreed gates; slope-aware routing; T-junctions; signposts naming destinations | ✅ cross-border road meeting tested |
+| Villages (church, inn, houses, lanterns, well), farms, cottages, ruined towers, hill keeps and great castles, standing stones, shrines, camps with chests | ✅ validated across seeds and regions |
+| Region fortune and per-place luck for finds and chests | ✅ |
+| Regions stream in and out (worker planning, time-sliced building, per-region colliders and finds); castles as landmarks from 5 km | ✅ browser-tested |
+| Discovery banners, region names, the Hollow Atlas (fog of war, relief, roads, places), compass with nearby unknown places | ✅ browser-tested |
+| A random world for every New Journey (unless a seed is typed) | ✅ |
 
 ## Milestone 2: Medieval village + castle approach (next)
 

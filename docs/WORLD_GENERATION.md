@@ -23,15 +23,26 @@ them afterwards and can be thrown away and rebuilt at any time.
 Coordinates are metres, Y is up, and north is −Z. The spawn is near the origin and the castle is
 about 1.6 km to the north.
 
-## Pipeline (`src/world/plan.ts`)
+The world has two layers:
+
+- **The opening vale**: an authored composition with seeded variation (the first 4 × 3 km).
+- **The open world** around it: an endless grid of 1 km procedural regions. Each region is planned
+  from `(seed, rx, rz)` alone, so it does not matter which region is generated first, or on which
+  thread. There is no path to follow; roads branch in every direction, and some places sit off
+  every road.
+
+## The vale (`src/world/plan.ts`)
 
 1. **Macro geography** (`macro.ts`): continuous height in metres from domain-warped simplex fBm.
    The opening region is an authored anchor with seeded variation:
    - the forested southern ridge (spawn);
    - a meandering valley trough with walls rising 95–150 m;
    - the castle crag (84–98 m high, flat summit of radius 100–115 m);
-   - hills behind it, and ridged blue mountains beyond about 3.3 km and to the sides.
-   Beyond about 5.2 km it blends into generic seeded wilderness, so there is no edge wall.
+   - hills behind it.
+   An elliptical anchor weight blends the vale into the open countryside (`wildHeight`): broad
+   lowlands and uplands, rolling hills, and sparse ridged mountain ranges with low passes where the
+   range mask dips. A range is placed deliberately 3–8 km north of the vale, so the opening vista
+   always has blue mountains on the horizon.
 2. **Castle reservation** (`castle.ts`): position, summit height (sampled average) and a defensive
    layout. This is the gate on the approach side, an irregular curtain-wall ring with towers at the
    vertices, twin gate towers, a keep at the rear, a cathedral hall with a crossing spire, and inner
@@ -74,19 +85,128 @@ about 1.6 km to the north.
 7. **Clearings and sightline:** clearings around sites, plus a *view wedge* from the spawn
    towards the castle. Trees are excluded from a corridor that widens by 0.11 m per metre. This is
    the planned "framed reveal" of reference B.
-8. **Validation** (`validation.ts`; see below).
+8. **Exits and side places:**
+   - The vale owns cells x −2…1, z −2…0 of the region grid.
+   - Every gate on its border gets a trade road, routed to the Vale Road network.
+   - Up to seven side places (towers, stone rings, shrines, camps, a cottage) are scattered on its
+     outer hills, away from the authored core; about 60% get a footpath.
+   - Walls and hedges are opened wherever a road passes through them.
+9. **Validation** (`validation.ts`; see below).
+
+## The open world (`regions.ts`, `regionPlan.ts`, `sitegen.ts`, `contentBuilder.ts`)
+
+**Region grid.** Cells are 1024 m squares. A region is planned in two stages.
+
+1. **Skeleton** (`regionSkeleton`, ~1 ms, macro heights only):
+   - **Name:** for example "the Ashen Downs".
+   - **Fortune:** a Gaussian luck shift of ±2.5, nudged upward with distance from the spawn. It
+     biases every roll in the region.
+   - **Gates:** see below.
+   - **Sites:** chosen from an 8 × 8 jittered candidate grid scored by slope, height and
+     prominence, with minimum spacing. Probabilities per region:
+
+     | Site | Chance | Placement |
+     | --- | --- | --- |
+     | Castle | 16% | Prominent summit. 22% of these are great castles with a cathedral; the rest are hill keeps |
+     | Village | 55% | |
+     | Farmsteads | 0–2 | |
+     | Ruined watchtower | 50% | |
+     | Standing stones | 32% | |
+     | Wayside shrine | 38% | |
+     | Abandoned camp | 34% | |
+     | Lone cottages | 0–2 | |
+
+   - **Castle layouts** (`planCastleAt`).
+   Distant terrain needs only the skeleton (castle summits), so the horizon never waits for
+   planning.
+2. **Full plan** (`planRegion`, ~20–35 ms):
+   - **Network root:** a village street, or a crossroads hub with a waystone.
+   - **Joins:** gates and castle approaches join the network nearest-first.
+   - **Minor sites:** each gets a footpath with 65% probability; the rest are left for wanderers.
+   - **Population:** each site is filled in by its generator.
+   - **Signposts:** placed where side roads join, naming the destination and its compass
+     direction.
+   - **Finish:** buildings are seated and pads emitted.
+
+**Gates** (`cellGates`). A road crosses a border only at a gate, which is a pure function of the
+edge.
+
+- 13 candidates along the middle of the edge are scored by local slope, with a small hash jitter.
+  The gentlest one wins.
+- Edges open with 72% probability, or 50% on the vale border, where the gentlest edge of each
+  side is always open. Edges steeper than 0.28 never open.
+- Both regions compute the same gate, and enter it straight along its normal for 30 m, pinned to
+  the same height. Their roads therefore meet exactly across the border; a unit test checks
+  this.
+
+**Road routing** (`pathfind.ts`, `ContentBuilder.route`):
+
+- **Search:** Dijkstra on a 16 m grid with 8 neighbours. Cost rises with terrain grade (strongly
+  above 80% of the road's grade limit). Reserved ground costs infinity: other sites, buildings
+  (+6 m), fields, fences, ruins and castle summits. The 40 m border margin costs 4×.
+- **Goal:** the search ends at the first node that touches the existing network, so new roads
+  always make T-junctions and never cross.
+- **Junction height:** joins are allowed only where the network road runs within 2.5 m of natural
+  ground, so there is never a step onto an embankment.
+- **Geometry:** the path is simplified (RDP), turned into Catmull-Rom control points (border-hugging
+  points dropped) and graded with pinned ends.
+- **Checks:** a road is rejected and re-routed (up to 3 tries, avoiding the failed junction) if it
+  misses a pin by more than 0.4 m, leaves its area, or brushes a building.
+
+**Site generators** (`sitegen.ts`):
+
+- **Village:**
+  - the church and inn take the plots nearest the centre;
+  - 7–13 houses line every street within 88 m, nearest plots first;
+  - lanterns alternate along the street, with a well on the green;
+  - a lost-and-found chest stands behind the inn;
+  - signs mark where streets leave the village.
+- **Farmstead:**
+  - the track is routed first, then the farmhouse, barn and shed are set around the yard;
+  - fields with hedges, fences or walls;
+  - sometimes a tool-weapon leans on the barn;
+  - if no building fits, the track is removed again.
+- **Cottage:** a house, a track if a road is near, and a woodpile. Sometimes an axe is left in the
+  chopping block.
+- **Ruined watchtower:** a broken climbable tower with a weapon in the rubble, or a strongbox.
+- **Castle:** a hill keep or great castle, with a road up to the gate and a weapon driven into the
+  earth before it (+1.4 luck).
+- **Standing stones:** a ring of 7–12 stones, some fallen. A weapon lies at the heart; its luck is
+  the region's fortune ± a wide Gaussian, so the old magic cuts both ways.
+- **Wayside shrine:** a saint in a niche, candles, and often an offering (+0.8 luck).
+- **Abandoned camp:** tents round a fire, a woodpile, and a traveller's chest (luck = fortune ±
+  1.3 σ).
+
+**Area content** (`WorldContent`) carries castles, ruins, settlements, buildings, roads, fields,
+fences, pads, pre-road pads, clearings, props, finds, sites and gates. The vale (`WorldPlan`) adds
+the spawn, the ancient tree and the sightline.
+
+## World queries (`worldIndex.ts`)
+
+- **`WorldIndex`** owns the vale plus a least-recently-used cache of planned regions (72 by
+  default). Regions are planned on demand on any thread, or adopted from a worker; the result is
+  identical either way. `areasNear(x, z)` returns the area owning the point, plus neighbours
+  within 24 m of a border.
+- **`WorldTerrain`** answers height, normal and road queries across the whole world: macro →
+  summit pads → the nearest areas' roads → building pads.
+- **`heightFar`** (macro plus skeleton castle summits) shapes terrain nodes larger than 512 m
+  outside the vale. A unit test bounds the difference from the planned surface.
 
 Final height = macro → castle pad → roads → building pads (`terrain.ts`). Each stage is a pure
 world-space function.
 
 ## Ecology (`ecology.ts`)
 
-- **Forest density** comes from authored masks (the ridge forest with a ragged edge, valley
-  copses, forested valley walls, crag woodland, a mountain tree line), reduced by clearings, the
-  sightline wedge, building pads, and open verges along the trade road. Footpaths stay enclosed on
+- **Forest density, inside the vale:** authored masks (the ridge forest with a ragged edge,
+  valley copses, forested valley walls, crag woodland).
+- **Forest density, in the open world:** great woods (1.1 km noise) and copses, thinner on high
+  moors.
+- **Everywhere:** a mountain tree line, then reductions from every nearby area's clearings, the
+  sightline wedge, building pads, and open verges along trade roads. Footpaths stay enclosed on
   purpose.
 - **Species** depend on altitude and a moisture proxy: oak, beech, birch, pine, poplar, willow
-  (moist low ground) and dead trees. Pines dominate above 120 m.
+  (moist low ground) and dead trees. Pines dominate above 120 m. Beyond the vale a 3.6 km
+  regional character mixes in pine country (60% pine) and birch heaths (50% birch).
 - **Placement:** one jittered sample per 6 m cell (trees), 3 m cell (ground cover) or 1.4 m cell
   (grass and crops), kept with probability equal to density. A sample is rejected on roads,
   building footprints, fields (except crops), fences, ruins, props, the castle summit, and slopes
@@ -106,9 +226,18 @@ world-space function.
   - Ground cover is drawn within 150 m and grass within 70 m.
   - Tree-trunk colliders are generated within 90 m.
 
+## Region streaming (summary; see ARCHITECTURE.md)
+
+- **Planning:** regions within 1.15 km of the player are planned in workers (or inline as a
+  fallback) and adopted.
+- **Building:** their structures are raised over several frames under a 4 ms per-frame budget.
+  Colliders, finds, chests and readable signs are added per region and removed together beyond
+  1.7 km.
+- **Landmarks:** castles within 5.2 km are built from skeletons as soon as they could be seen.
+
 ## Persistence (current state)
 
-Milestone 1 has **no save system**. Static content rebuilds identically from the seed, which unit
+There is **no save system** yet. Static content rebuilds identically from the seed, which unit
 tests verify. Planned save format (Milestone 4): IndexedDB, versioned, storing diffs keyed by
 stable ids such as `{seed}/{settlementId}/b{index}` and `{seed}/prop/...`. Whole scenes will
 never be serialised.
@@ -122,16 +251,24 @@ It checks that:
 - no building corner sits on a road, no buildings overlap, and no fence crosses a building;
 - the ground in front of every door is level with it and free of colliders;
 - roads are continuous, within their grade limits, and name real places at both ends;
-- side tracks join another road, the footpath meets the Vale Road and starts at the spawn, and the
-  Vale Road reaches the castle gate;
+- roads stay inside their area (gates lie exactly on the border) and every road that ends or
+  starts on another road actually meets it, at the same height (< 0.6 m);
+- the vale's footpath meets the Vale Road and starts at the spawn, the Vale Road reaches the castle
+  gate, and the vale has at least one road out to the wider world;
 - the spawn is on walkable ground and inside no collider;
 - no field lies on a road and no fence crosses a road;
-- the castle summit pad is applied and the gate is level with the summit.
+- every castle summit pad is applied and every gate is level with its summit;
+- every site lies inside its area.
 
-`npx vite-node scripts/validate.ts -- 40` validates 40 seeds. The latest run passed 40/40.
+`validateContent` runs these shared checks on any area. `validateWorld` adds the vale's promises.
+The unit tests validate the vale for 8 seeds and 32 regions across 3 seeds. A development sweep
+covered 360 regions across 6 seeds with 0 issues. `npx vite-node scripts/validate.ts -- 40`
+validates 40 vales.
 
 ## Debug tools
 
+- `npx vite-node scripts/macromap.ts -- <seed> <out.ppm> [extent] [centreX] [centreZ]` renders the
+  macro height field over many kilometres, with the 1 km region grid.
 - `npx vite-node scripts/worldmap.ts -- <seed> <out.ppm> [extent] [centreZ]` renders a hillshaded
   top-down map with roads, buildings, fields, props, ruin, castle and spawn.
 - In-game F3 overlay: seed, generator version, position, streaming queues, collider counts,

@@ -182,7 +182,7 @@ export class UI {
 
   banner(kicker: string, title: string, seconds = 5): void {
     this.bannerEl.querySelector('.banner-kicker')!.textContent = kicker;
-    this.bannerEl.querySelector('.banner-title')!.textContent = title;
+    this.bannerEl.querySelector('.banner-title')!.textContent = title.charAt(0).toUpperCase() + title.slice(1);
     this.bannerEl.classList.add('show');
     this.bannerTimer = seconds;
   }

@@ -176,20 +176,28 @@ function prop(b: MeshBuilder, p: PropPlan, terrain: TerrainLike, world: Collisio
       break;
     }
     case 'standing-stone': {
+      // Weathered grey monoliths: a tapering, slightly irregular stack, patched with lichen.
       const sc = Math.abs(p.scale ?? 1);
       const rng = new Rng(deriveSeed(p.id, 'stone'));
-      const tone = col('#d6d0c4').multiplyScalar(rng.range(0.82, 1.02));
+      const tone = col('#b4b2a6').multiplyScalar(rng.range(0.85, 1.05));
+      const lichen = col('#8a9a5a');
       if ((p.scale ?? 1) < 0) {
         // Fallen: lying on its side, half sunk in the turf.
-        b.box('ruinStone', m.clone().multiply(trs(0, 0.25 * sc, 0, rng.range(-0.3, 0.3), 1, 1, 1, Math.PI / 2 - 0.08, 0)), 0, 0, 0, 0.95 * sc, 2.6 * sc, 0.5 * sc, { color: tone, aoBottom: 0.3 });
+        const lm = m.clone().multiply(trs(0, 0.22 * sc, 0, rng.range(-0.3, 0.3), 1, 1, 1, Math.PI / 2 - 0.08, 0));
+        b.box('plain', lm, 0, 0, 0, 1.0 * sc, 2.6 * sc, 0.55 * sc, { color: tone, aoBottom: 0.3 });
+        b.box('plain', lm, 0.05 * sc, 0.4 * sc, 0.3 * sc, 0.6 * sc, 0.8 * sc, 0.06, { color: lichen });
         world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.5 * sc, hd: 1.35 * sc, y0: y - 0.5, y1: y + 0.55 * sc, tag: p.id });
       } else {
-        const lean = trs(0, 0, 0, 0, 1, 1, 1, rng.range(-0.06, 0.06), rng.range(-0.06, 0.06));
+        const lean = trs(0, 0, 0, 0, 1, 1, 1, rng.range(-0.07, 0.07), rng.range(-0.07, 0.07));
         const sm = m.clone().multiply(lean);
-        b.box('ruinStone', sm, 0, 1.1 * sc - 0.4, 0, 0.95 * sc, 2.2 * sc + 0.8, 0.5 * sc, { color: tone, aoBottom: 0.45 });
-        b.box('ruinStone', sm, 0, 2.3 * sc - 0.35, 0, 0.75 * sc, 0.35 * sc, 0.42 * sc, { color: tone.clone().multiplyScalar(0.95) });
-        if (rng.chance(0.4)) b.box('foliagePlain', sm, 0, 0.35, 0.26 * sc, 0.8 * sc, 0.5, 0.06, { color: col('#5f7a3a') });
-        world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.5 * sc, hd: 0.28 * sc, y0: y - 0.5, y1: y + 2.4 * sc, tag: p.id });
+        const H = 2.4 * sc;
+        const w0 = 1.0 * sc;
+        const d0 = 0.55 * sc;
+        b.box('plain', sm, 0, H * 0.25 - 0.5, 0, w0, H * 0.5 + 1, d0, { color: tone, aoBottom: 0.5 });
+        b.box('plain', sm, rng.range(-0.06, 0.06) * sc, H * 0.68, 0, w0 * 0.86, H * 0.38, d0 * 0.9, { color: tone.clone().multiplyScalar(1.03) });
+        b.box('plain', sm, rng.range(-0.1, 0.1) * sc, H * 0.93, 0, w0 * rng.range(0.5, 0.7), H * 0.16, d0 * 0.8, { color: tone.clone().multiplyScalar(1.06) });
+        if (rng.chance(0.7)) b.box('plain', sm, rng.range(-0.25, 0.25) * sc, H * rng.range(0.15, 0.45), d0 / 2 + 0.02, w0 * 0.28, H * 0.12, 0.04, { color: lichen });
+        world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.5 * sc, hd: 0.3 * sc, y0: y - 0.5, y1: y + H, tag: p.id });
       }
       break;
     }

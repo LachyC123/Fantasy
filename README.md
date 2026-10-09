@@ -3,12 +3,21 @@
 A first-person fantasy exploration game for the browser, with a painterly, pixelated look. Every
 world grows from a seed. You wake beneath an ancient tree at the edge of a forest. Below you lies a
 green vale with a winding road, farms and a hamlet. An enormous Gothic castle rises on the horizon.
+Beyond the vale, the world goes on without end and differs for every seed.
 
-**Current state: Milestone 1, "Beautiful playable first valley", plus the procedural arsenal and
-bestiary foundation.** There is a nearly unlimited supply of generated weapons, with heavy-tailed
-luck, five finds in the vale and creatures in the developer gallery; see
-[docs/PROCEDURAL_CONTENT.md](docs/PROCEDURAL_CONTENT.md). Also see
-[docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for what works and what does not yet.
+**Current state: Milestone 1, plus three later additions:**
+
+- **The open procedural world.** Endless regions with:
+  - villages (church, inn, lanterns), farms and cottages;
+  - ruined towers, hill keeps and great castles;
+  - standing stones, shrines and camps with chests;
+  - branching roads with signposts, and places off every road.
+- **Exploration tools:** the Hollow Atlas map with fog of war, and a compass.
+- **The procedural arsenal and bestiary:** unlimited generated weapons with heavy-tailed luck, plus
+  creatures in the developer gallery. See [docs/PROCEDURAL_CONTENT.md](docs/PROCEDURAL_CONTENT.md).
+
+[docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) lists what works and what does not
+yet.
 
 ![Forest-edge vista towards the castle](docs/screenshots/01-spawn-vista.png)
 
@@ -62,8 +71,9 @@ quality preset (no shadows, short view distance). Hold the phone sideways.
 | Shift | Run |
 | Space | Jump |
 | Left click | Swing your weapon (there are no enemies yet; combat is Milestone 5) |
-| E | Read signposts, examine the waystone, look into the well, **take a weapon** |
+| E | Read signposts, examine waystones and shrines, look into wells, **open a chest**, **take a weapon** |
 | I | Show the card of the weapon in your hand |
+| M | Open or close the **Hollow Atlas** (+ / − or the mouse wheel to zoom) |
 | Esc | Release the mouse and pause |
 | F3 | Debug overlay (FPS, draw calls, streaming, colliders, validation) |
 
@@ -76,7 +86,22 @@ quality preset (no shadows, short view distance). Hold the phone sideways.
 | **Swing** / **Jump** | Swing your weapon / jump |
 | **Use** (appears when something is in reach), or tap the prompt | Read, examine, take a weapon |
 | **Weapon** | Show the card of the weapon in your hand |
+| **Map** | Open the Hollow Atlas (also in the pause menu) |
 | **❚❚** | Pause (Resume returns straight to the game) |
+
+### Exploring
+
+There is no path you have to follow. Some ways to explore:
+
+- Leave the vale by any of its roads.
+- Follow a signpost, or strike out across country towards a tower on a hill or smoke above the
+  trees.
+- Watch the compass. Gold marks are places you have found. A hollow mark means somewhere
+  undiscovered is close by.
+- Check the Atlas. It inks in only the ground you have travelled near, and lists every place you
+  have found.
+- New Journey suggests a random seed every time, so each journey is a different world. Type a seed
+  to revisit one, or use `reference-valley` for the reference world.
 
 ## Settings
 

@@ -1,87 +1,158 @@
 [
-  {
-    "name": "01-spawn-vista",
-    "at": "spawn",
-    "lookAt": "castle",
-    "pitch": 0.02,
-    "wait": 1500
-  },
-  {
-    "name": "02-forest-edge",
-    "at": "foot",
-    "t": 0.75,
-    "lookAt": "castle",
-    "pitch": 0.0,
-    "wait": 1000
-  },
-  {
-    "name": "03-hamlet-street-castle",
-    "at": "road",
-    "t": 0.43,
-    "lookAt": "castle",
-    "pitch": 0.06,
-    "wait": 1000
-  },
-  {
-    "name": "04-hamlet-cottage",
-    "at": "house",
-    "index": 1,
-    "dist": 12,
-    "side": 4,
-    "pitch": 0.08,
-    "wait": 1000
-  },
-  {
-    "name": "05-ruined-watchtower",
-    "at": "ruin",
-    "dx": -14,
-    "dz": 10,
-    "yaw": -1.0,
-    "pitch": 0.05,
-    "wait": 1000
-  },
-  {
-    "name": "06-farmstead",
-    "at": "farm",
-    "dx": 25,
-    "dz": 25,
-    "yaw": 2.4,
-    "pitch": 0.0,
-    "wait": 1000
-  },
-  {
-    "name": "07-dusk-vista",
-    "at": "spawn",
-    "lookAt": "castle",
-    "pitch": 0.02,
-    "tod": "dusk",
-    "wait": 1000
-  },
-  {
-    "name": "08-view-model",
-    "at": "spawn",
-    "inspect": true,
-    "tod": "golden",
-    "wait": 800
-  },
-  {
-    "name": "09-weapon-find-castle-gate",
-    "at": "find",
-    "id": "castle-gate",
-    "dist": 2.6,
-    "angle": 0.5,
-    "pitch": -0.3,
-    "tod": "golden",
-    "wait": 6000
-  },
-  {
-    "name": "10-weapon-find-waystone",
-    "at": "find",
-    "id": "waystone",
-    "dist": 2.0,
-    "angle": 2.2,
-    "pitch": -0.6,
-    "tod": "golden",
-    "wait": 6000
-  }
+{
+"name": "01-spawn-vista",
+"at": "spawn",
+"lookAt": "castle",
+"pitch": 0.02,
+"wait": 1500
+},
+{
+"name": "02-forest-edge",
+"at": "foot",
+"t": 0.75,
+"lookAt": "castle",
+"pitch": 0.0,
+"wait": 1000
+},
+{
+"name": "03-hamlet-street-castle",
+"at": "road",
+"t": 0.43,
+"lookAt": "castle",
+"pitch": 0.06,
+"wait": 1000
+},
+{
+"name": "04-hamlet-cottage",
+"at": "house",
+"index": 1,
+"dist": 12,
+"side": 4,
+"pitch": 0.08,
+"wait": 1000
+},
+{
+"name": "05-ruined-watchtower",
+"at": "ruin",
+"dx": -14,
+"dz": 10,
+"yaw": -1.0,
+"pitch": 0.05,
+"wait": 1000
+},
+{
+"name": "06-farmstead",
+"at": "farm",
+"dx": 25,
+"dz": 25,
+"yaw": 2.4,
+"pitch": 0.0,
+"wait": 1000
+},
+{
+"name": "07-dusk-vista",
+"at": "spawn",
+"lookAt": "castle",
+"pitch": 0.02,
+"tod": "dusk",
+"wait": 1000
+},
+{
+"name": "08-view-model",
+"at": "spawn",
+"inspect": true,
+"tod": "golden",
+"wait": 800
+},
+{
+"name": "09-weapon-find-castle-gate",
+"at": "find",
+"id": "castle-gate",
+"dist": 2.6,
+"angle": 0.5,
+"pitch": -0.3,
+"tod": "golden",
+"wait": 6000
+},
+{
+"name": "10-weapon-find-waystone",
+"at": "find",
+"id": "waystone",
+"dist": 2.0,
+"angle": 2.2,
+"pitch": -0.6,
+"tod": "golden",
+"wait": 6000
+},
+{
+"name": "12-village-street",
+"at": "street",
+"kind": "village",
+"from": [
+3000,
+1500
+],
+"t": 0.12,
+"pitch": 0.03,
+"tod": "golden",
+"wait": 6000
+},
+{
+"name": "13-hill-castle",
+"at": "site",
+"kind": "castle",
+"from": [
+3000,
+-1500
+],
+"dist": 125,
+"angle": 0.9,
+"pitch": 0.16,
+"tod": "golden",
+"wait": 9000
+},
+{
+"name": "14-standing-stones",
+"at": "site",
+"kind": "stones",
+"from": [
+2800,
+2300
+],
+"dist": 15,
+"angle": -0.6,
+"pitch": 0.02,
+"tod": "afternoon",
+"wait": 6000
+},
+{
+"name": "15-camp",
+"at": "site",
+"kind": "camp",
+"from": [
+3000,
+1500
+],
+"dist": 9,
+"angle": 1.2,
+"pitch": -0.2,
+"tod": "afternoon",
+"wait": 6000
+},
+{
+"name": "16-atlas",
+"at": "site",
+"kind": "shrine",
+"from": [
+3000,
+1500
+],
+"dist": 6,
+"angle": 0.4,
+"pitch": -0.1,
+"tod": "golden",
+"wait": 3000,
+"atlas": true,
+"zoomOut": 1
+}
 ]

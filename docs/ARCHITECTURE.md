@@ -10,30 +10,36 @@ modules and Playwright drives the built game in Chromium.
 main.ts                     bootstrap, WebGL2 check, test-hook export
 app/
   game.ts                   Game: renderer, lighting, state machine, frame loop, test API
-  worldRuntime.ts           WorldRuntime: owns one generated world and its scene graph
+  worldRuntime.ts           WorldRuntime: owns one world; streams regions, landmarks, finds, readables
   input.ts                  keyboard/mouse, deliberate pointer lock, consumable presses, analog stick axis
   touch.ts                  touch controls (floating stick, drag look, buttons) feeding Input
   device.ts                 touch-device detection (?touch forces it)
   settings.ts               Settings type, defaults, localStorage load/save
-  guidance.ts               control hints that advance on performance; place banners
+  guidance.ts               control hints that advance on performance; discovery and region banners
 core/
   rng.ts                    seed canonicalisation, hashing, namespaced streams, Rng
   noise.ts                  seeded simplex 2D, fBm, ridged multifractal
   math.ts                   clamp/lerp/smoothstep/damp, segment distance, Catmull-Rom
 world/                      (pure data + generation; no WebGL needed)
-  types.ts                  WorldPlan, RoadPlan, BuildingPlan, CastlePlan, RuinPlan, Pad…
-  macro.ts                  MacroField: anchor valley + wilderness height function
-  castle.ts                 planCastle (logical layout)
+  types.ts                  WorldContent, WorldPlan, RegionPlan, Gate, SitePlan, RoadPlan, BuildingPlan…
+  macro.ts                  MacroField: vale anchor blended into endless countryside and ranges
+  castle.ts                 planCastle / planCastleAt (great castles and hill keeps)
   roads.ts                  densify, grade (pinned), RoadIndex spatial grid
-  plan.ts                   generateWorldPlan, createTerrain
-  terrain.ts                Terrain: final height = macro → pads → roads → pads
+  plan.ts                   generateWorldPlan (the vale, its exits and side places), createTerrain
+  regions.ts                region grid, border gates, region skeletons (sites, fortune, castles)
+  regionPlan.ts             planRegion: road network, site population, signposts, pads
+  sitegen.ts                site generators (village, farm, cottage, tower, castle, stones, shrine, camp)
+  contentBuilder.ts         ContentBuilder: staged terrain, A*-routed roads, footprints, finalisation
+  pathfind.ts               slope-aware grid Dijkstra to the nearest network point, RDP simplify
+  worldIndex.ts             WorldIndex (lazy deterministic areas, LRU) and WorldTerrain
+  terrain.ts                Terrain (planning stage) and TerrainLike: macro → pads → roads → pads
   geometry2d.ts             oriented-rectangle helpers (SAT overlap, sampling)
   ecology.ts                forest density, species, deterministic scatter
   validation.ts             spatial validation report
   terrainColor.ts           painterly terrain classification → vertex colour
   terrainStreamer.ts        quadtree LOD terrain, skirts, budgeted build queue
   vegetationStreamer.ts     chunked scatter → shared InstancedMesh batches, LODs, colliders
-  structures.ts             buildings, ruin, castle, props, fences, road ribbons, ancient tree
+  structures.ts             buildings, ruins, props, fences, road ribbons (time-sliced steps), castles
   names.ts                  place-name grammars
 assets/
   geo.ts                    MeshBuilder: metre-UV boxes, cylinders, tris, per-material batches
@@ -55,7 +61,8 @@ gameplay/
   luck.ts                   shared rarity/condition model with heavy tails
   weapons.ts                weapon genome (shape, material, affixes, stats, names)
   creatures.ts              creature genome (body plan, mutations, moves, stats, names)
-  loot.ts                   starter weapon, weapon finds in the world, swap-on-take
+  loot.ts                   starter weapon, finds and chests per streamed area, swap-on-take
+  exploration.ts            fog-of-war cells and discovered places for the journey
 world/ (generation in workers)
   genCore.ts                everything needed to generate data for a seed (no scene objects)
   genWorker.ts              Web Worker answering terrain/vegetation jobs with typed arrays
@@ -73,6 +80,8 @@ audio/
   audio.ts                  Web Audio synthesised soundscape (placeholders)
 ui/
   ui.ts, styles.css         DOM front end (title, panels, HUD, pause, debug)
+  atlas.ts                  the Hollow Atlas: parchment map with fog of war, relief, roads, places
+  compass.ts                compass ribbon with known and nearby unknown places
 ```
 
 Dependency direction: `core` ← `world` ← `assets`/`rendering` ← `player`/`ambient` ← `app`.
@@ -100,9 +109,11 @@ generated and validated in Node or a worker.
 
 ## State machine
 
-`boot → title → loading → intro → capture → playing ⇄ paused`, plus `→ title`.
+`boot → title → loading → intro → capture → playing ⇄ paused`, plus `playing ⇄ atlas`,
+`paused ⇄ atlas` and `→ title`.
 
-- The reference world is built behind the title screen as a live backdrop.
+- A world is built behind the title screen as a live backdrop: a random seed, unless `?seed=` asks
+  for one.
 - **Begin** reuses it if the seed matches, otherwise rebuilds with a progress bar.
 - Losing pointer lock, or the window losing focus, pauses the game. Gameplay input is disabled
   under every menu. Esc closes the top panel.
@@ -120,14 +131,28 @@ generated and validated in Node or a worker.
     concatenated into the shared instanced meshes. That is one batch per species × variant × LOD ×
     material, so draw calls stay flat.
   - The chunk cache is bounded at 2,600 chunks.
-- **Static structures:** batched per material at load (about 25 draw calls). The castle is always
-  present as the long-range landmark.
+- **Regions** (`WorldRuntime.stream`, every 0.25 s):
+  - Cells within 1.15 km of the camera are requested from the worker pool as `region` jobs and
+    adopted into the main-thread `WorldIndex`. They are identical to what the main thread would
+    plan. If the player arrives before a worker answers, the region is planned inline.
+  - One area at a time is raised by `buildStructureSteps`, a generator stepped for up to 4 ms per
+    frame. Its colliders carry the area's collision group.
+  - When it completes, its finds and chests join the `LootSystem`, its signs, shrines and wells
+    become interactables, and its chimneys feed the smoke pool (the nearest 36 smoke).
+  - Areas more than 1.7 km away are unloaded: meshes disposed, collision group removed, finds
+    dropped. Swapped weapons and opened chests are remembered for the journey.
+- **Landmarks:** castles within 5.2 km are built from region skeletons (no full plan needed), one
+  per stream tick, and dropped beyond 6.4 km. The vale's castle is always present.
 - **Generation runs in Web Workers** (`GenPool`; one fewer worker than CPU cores, between 1 and 4).
-  - Each worker rebuilds the deterministic `GenCore` from the seed and answers jobs (terrain
-    nodes, tree, ground and grass chunks) with transferable typed arrays.
+  - Each worker rebuilds the deterministic `GenCore` from the seed and answers jobs with
+    transferable typed arrays: terrain nodes, tree, ground and grass chunks, and whole region
+    plans. A worker plans any region it needs itself, lazily.
+  - Terrain nodes larger than 512 m outside the vale use `heightFar` (macro plus skeleton castle
+    summits), so the horizon never waits for planning.
   - The main thread only wraps the arrays in geometry and uploads them.
   - Jobs are ranked by size and distance; stale ones are dropped when the camera moves.
-  - Without worker support, the same jobs run inline under a time budget.
+  - Without worker support, or if workers fail to start (a blocked script, or a 15 s timeout), the
+    same jobs run inline under a time budget.
 - Vegetation batches are re-uploaded only when the set of chunks feeding them changes. Each batch
   has a signature, so the upload covers only the used instance range.
 
@@ -137,7 +162,8 @@ generated and validated in Node or a worker.
 
 - the analytic terrain height;
 - static boxes (buildings, walls, fences, ruin segments and steps, props, castle parts) and
-  cylinders (towers, the well, haystacks, the ancient tree) in a 16 m grid;
+  cylinders (towers, the well, haystacks, the ancient tree) in a 16 m grid. Each shape carries the
+  group of the area that added it, and `removeGroup` drops a streamed region's shapes together;
 - a replaceable set of streamed trunk cylinders.
 
 `groundAt` returns the highest walkable surface under the capsule within step height, which lets
@@ -151,5 +177,6 @@ down on descents.
 ## Test hooks
 
 `window.__hollowAtlas` exposes, among others: state, plan, player, teleport, look, attack,
-setSettings, validation, stats, perf, autopilot, frameStats and inspectViewModel. These are used
+setSettings, validation, stats, perf, autopilot, frameStats, inspectViewModel, sites, discovered,
+streamStats, nearestSite, regionPlan and finds. These are used
 only by automated tests and the screenshot script; normal gameplay never calls them.

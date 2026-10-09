@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.0: An open, procedural world to explore
+
+**Added**
+- The world beyond the vale is endless and procedural: 1 km regions planned from the seed alone, in
+  any order, on any thread. Each has a name, a fortune (a luck shift) and its own places.
+- Places:
+  - villages (stone church with bell tower and spire, inn with a hanging sign, houses, lanterns,
+    well, cobbled streets, a chest behind the inn);
+  - farmsteads with fields, and cottages;
+  - ruined watchtowers;
+  - hill keeps and great castles on summits;
+  - standing stones, wayside shrines, abandoned camps with chests;
+  - crossroads waystones.
+- Roads branch between regions through border gates both neighbours agree on. They are routed
+  around steep ground by A*, always join at T-junctions, and signposts name destinations with
+  compass directions. About a third of minor places are left off the roads.
+- The vale opens onto the world: exit roads through its border, and side places on its hills.
+- Chests open with a swinging lid to reveal a weapon. Luck depends on the region and the place.
+  Stone rings and camps roll wild; castle gates are generous.
+- Discovery banners for every kind of place, and region names as you cross into them.
+- The Hollow Atlas (**M**, the touch **Map** button, the pause menu): a parchment map with fog of
+  war, hill-shaded relief, forests, known roads, region names and every place found, with zoom.
+- A compass ribbon: cardinal points, places you've found, and hollow marks when something
+  undiscovered is close.
+- New Journey suggests a random world every time (type a seed to revisit one).
+- Countryside terrain: lowlands, uplands and mountain ranges with passes; a range north of the
+  vale keeps the opening vista; regional forests (pine country, birch heaths).
+- Streaming:
+  - regions are planned in workers and raised over several frames (4 ms per frame);
+  - colliders, finds, chests and readable things load and unload per region;
+  - castles are visible as landmarks from up to 5 km;
+  - distant terrain is shaped from region skeletons.
+- Tests: 12 open-world unit tests, an open-world browser test, and a region screenshot set.
+
+**Changed**
+- Validation is shared by every area: roads must meet at the same height and stay in their area.
+  Walls and hedges open where roads pass.
+- The castle planner builds great castles or hill keeps on any summit.
+- Smoke follows the nearest chimneys among all loaded regions.
+
 ## 0.3.0: Play on phones and tablets
 
 **Added**

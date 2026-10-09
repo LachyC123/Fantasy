@@ -8,7 +8,9 @@ The full brief is in [BRIEF.md](BRIEF.md). This file states the design as it app
 - **Genre:** first-person, single-player, exploration-driven fantasy action RPG.
 - **Feeling:** wonder, solitude, beauty, mystery; the urge to go *one hill farther*.
 - **Premise:** you wake beneath an ancient tree with a nearly blank book, the Hollow Atlas, in a
-  kingdom whose history has been erased. The Atlas itself arrives in Milestone 4.
+  kingdom whose history has been erased.
+  - **Now:** the Atlas is a map that fills in as you travel.
+  - **Later (Milestone 4):** its story role (the altar, entries and lore).
 
 ## Six pillars (every feature must strengthen at least one)
 
@@ -21,8 +23,16 @@ The full brief is in [BRIEF.md](BRIEF.md). This file states the design as it app
 
 ## Core loops
 
-- **Minute to minute (playable now):** survey the horizon → pick a route → cross real terrain →
-  notice details (signs, the waystone, smoke, birds) → read or examine → continue.
+- **Minute to minute (playable now):** survey the horizon → pick a direction (no path is the right
+  one) → cross real terrain → notice details (smoke, a tower on a hill, a mark on the compass) →
+  discover a place → read, open a chest, take a weapon → check the Atlas → choose the next hill.
+- **Exploration is not linear.**
+  - The world is an endless grid of procedural regions, each different for every seed.
+  - Roads branch through gates in every direction, and signposts name real destinations.
+  - About a third of the minor places sit off every road, for people who wander.
+  - The compass hints at undiscovered places only when you are close.
+  - Luck varies by region (its fortune) and by place: stone rings and camps roll wildly, castle
+    gates generously, and a cottager's chopping block is humble.
 - **Expedition (Milestones 4–7):** set out from a safe place → follow a rumour or a vista → find
   2–5 details and one larger location → overcome an obstacle → return with knowledge or loot.
 - **Long progression (Milestones 8–9):** fill the Atlas, unlock traversal and magic, connect
@@ -57,5 +67,6 @@ The full brief is in [BRIEF.md](BRIEF.md). This file states the design as it app
 
 ## Controls (implemented)
 
-WASD/arrows move · mouse look · Shift run · Space jump · left click swing · E read/examine ·
-Esc pause · F3 debug overlay.
+WASD/arrows move · mouse look · Shift run · Space jump · left click swing · E read/open/take ·
+I weapon card · M the Atlas (+/− zoom) · Esc pause · F3 debug overlay. Touch: stick, drag to look,
+Swing/Jump/Use/Weapon/Map/Pause buttons.

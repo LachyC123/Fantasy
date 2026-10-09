@@ -257,10 +257,12 @@ export class WorldRuntime {
     for (const c of this.plan.castles) want.set(c.id, c);
     for (const [rx, rz] of this.cellsWithin(cam.x, cam.z, LANDMARK_RADIUS)) {
       const sk = this.index.skeleton(rx, rz);
-      if (sk) for (const c of sk.castles) want.set(c.id, c);
+      // Great castles are seen from 5 km; hill keeps from 2.5 km.
+      if (sk) for (const c of sk.castles) if (c.plateauRadius > 90 || Math.hypot(c.x - cam.x, c.z - cam.z) < LANDMARK_RADIUS / 2) want.set(c.id, c);
     }
     let built = 0;
-    for (const [id, c] of want) {
+    const order = [...want].sort((a, b) => Math.hypot(a[1].x - cam.x, a[1].z - cam.z) - Math.hypot(b[1].x - cam.x, b[1].z - cam.z));
+    for (const [id, c] of order) {
       if (this.landmarks.has(id) || built >= budget) continue;
       this.collision.group = `castle:${id}`;
       const s = buildCastleStructure(c, this.materials, this.collision);
@@ -271,7 +273,8 @@ export class WorldRuntime {
     }
     for (const [id, l] of [...this.landmarks]) {
       if (this.plan.castles.includes(l.castle)) continue;
-      if (Math.hypot(l.castle.x - cam.x, l.castle.z - cam.z) < LANDMARK_UNLOAD) continue;
+      const reach = l.castle.plateauRadius > 90 ? LANDMARK_UNLOAD : LANDMARK_UNLOAD / 2;
+      if (Math.hypot(l.castle.x - cam.x, l.castle.z - cam.z) < reach) continue;
       this.group.remove(l.group);
       l.group.traverse((o) => {
         const m = o as THREE.Mesh;

@@ -7,8 +7,8 @@ Only content that **actually exists in the code** is listed. Everything is gener
 | Name | Status |
 | --- | --- |
 | The Vale of Unwritten Days (opening anchor region) | Implemented: forested ridge, valley meadows, copses, the castle crag, hills, blue mountains. Its palette follows the brief's *Golden Weald*. |
-| Generic wilderness beyond about 5 km | Prototype: seeded hills and mountains with trees; no sites yet |
-| Other biomes (Weeping Fen, Violet Marches, …) | Planned (Milestone 3+) |
+| The open world (endless 1 km regions) | Implemented: lowlands, uplands, mountain ranges with passes, a northern range behind the vale; great woods and copses; regional character (pine country, birch heaths). Every region is named (e.g. *the Ashen Downs*) and has a fortune that shifts its loot |
+| Other biomes (Weeping Fen, Violet Marches, …), water | Planned (Milestone 3+) |
 
 ## Sites
 
@@ -19,13 +19,29 @@ Only content that **actually exists in the code** is listed. Everything is gener
 | Farmstead | Farmhouse, barn and shed around a yard; haystacks, cart, woodpile; 6–11 fields (wheat, barley, fallow, cabbage) with hedges, fences or dry-stone walls; farm track |
 | Hamlet | 6–9 buildings along the Vale Road (cottages and longhouses), well, signpost, barrels, woodpiles, cobbled street |
 | Lone cottages | Up to 4, each with its own track, named for a family (e.g. *Hale's Cottage*) |
-| Great castle | Curtain wall (7–9 sides) with towers, gatehouse and closed portcullis, keep with corner turrets, cathedral hall (buttresses, pinnacles, lancet windows, rose window, west towers, crossing tower and spire), inner towers and buildings. Name from a grammar (e.g. *the Spires of Sablecrest*). Exterior only in M1 |
+| Great castle | Curtain wall (7–9 sides) with towers, gatehouse and closed portcullis, keep with corner turrets, cathedral hall (buttresses, pinnacles, lancet windows, rose window, west towers, crossing tower and spire), inner towers and buildings. Name from a grammar (e.g. *the Spires of Sablecrest*). Exterior only. One crowns the vale; about 1 in 30 regions has another |
+| Hill keep | A smaller castle (5–7 sided wall, low towers, keep, chapel with a spire) on a prominent summit in about 1 region in 8, with a road up to its shut gate. Named e.g. *the Hold of Briarcrag* |
+| Village | Church (stone nave, buttresses, lancet windows, porch, bell tower and slate spire), inn (hanging painted sign, door lantern), 7–13 houses lining every street, lanterns, well, barrels, woodpiles, village signs, cobbled streets, a chest behind the inn. About 1 region in 2 |
+| Farmsteads, cottages | As in the vale, placed anywhere suitable, with tracks routed to the nearest road |
+| Ruined watchtowers | Anywhere with a view; a weapon in the rubble or a strongbox under the stair |
+| Standing stones | Rings of 7–12 stones (some fallen) on hills and moors, with a weapon at the heart rolled with wild luck. Named e.g. *the Whispering Ring* |
+| Wayside shrines | A saint in a stone niche with candles; often an offering (lucky). Named e.g. *Shrine of the Weeping Maid* |
+| Abandoned camps | Tents round a cold fire, a woodpile and a traveller's chest. Named e.g. *Charcoal Burners' Camp* |
+| Crossroads | Where a village-less region gathers its roads, marked by a waystone |
 
 ## Roads
 
-The Vale Road (trade road; dirt, cobbled through the hamlet; switchbacks to the castle gate), the
-Old Root Path (forest footpath from the spawn to the junction), the farm track and the cottage
-tracks.
+- **In the vale:**
+  - the Vale Road (trade road; dirt, cobbled through the hamlet; switchbacks to the castle gate);
+  - the Old Root Path (forest footpath from the spawn to the junction);
+  - the farm track and the cottage tracks;
+  - exit roads through the vale's border gates.
+- **Beyond the vale:**
+  - old trade roads crossing region borders at gates;
+  - village streets (cobbled) and castle approaches;
+  - farm and cottage tracks;
+  - footpaths to towers, stones, shrines and camps.
+- **Signposts** at junctions name the destination and its compass direction.
 
 ## Architecture kit (`assets/buildings.ts`, `assets/castle.ts`, `world/structures.ts`)
 
@@ -89,10 +105,10 @@ logs, mushrooms and stumps.
 
 ## Interactions (E)
 
-- Read the junction signpost and the hamlet signpost (they point at real places).
-- Examine the waystone (a hint at a future mystery thread).
-- Look into the well.
+- Read signposts (they point at real places), examine waystones and shrines, look into wells.
+- Open a chest (its lid swings up and the weapon inside is revealed), then take it.
 - Take a weapon find (it swaps with the weapon in your hand). **I** shows the weapon card.
+- **M** opens the Hollow Atlas.
 
 ## Audio (synthesised placeholders)
 
@@ -102,5 +118,5 @@ dirt and stone, sword whoosh, UI click.
 ## Not yet present (do not assume)
 
 NPCs; creatures in the world (they exist only in the gallery); combat hits (weapon stats are not
-yet used); inventory beyond the weapon in hand; the Atlas UI; saves; interiors; water and rivers;
-dungeons; quests.
+yet used); inventory beyond the weapon in hand; the Atlas's story entries (the map exists); saves;
+interiors; water and rivers; dungeons; quests.
