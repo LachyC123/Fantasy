@@ -1,8 +1,8 @@
 {
   "name": "hollow-atlas",
   "private": true,
-  "version": "0.1.0",
-  "description": "Hollow Atlas: The Unmapped Kingdoms \u2014 a painterly pixelated first-person fantasy exploration game for the browser.",
+  "version": "0.2.0",
+  "description": "Hollow Atlas: The Unmapped Kingdoms — a painterly pixelated first-person fantasy exploration game for the browser.",
   "type": "module",
   "scripts": {
     "dev": "vite",

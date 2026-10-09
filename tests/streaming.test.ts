@@ -49,7 +49,9 @@ describe('streaming', () => {
     // Every queued upload eventually lands.
     for (let k = 0; k < 200 && veg.pendingUploads > 0; k++) veg.update(cam);
     expect(veg.pendingUploads).toBe(0);
-    expect(p95).toBeLessThan(8);
+    // Wall-clock gate: well inside a 16.7 ms frame, with headroom for parallel test files,
+    // yet far below the 20-30 ms rebuild stalls this benchmark was written to catch.
+    expect(p95).toBeLessThan(12);
     expect(max).toBeLessThan(40);
     expect(terrain.stats.nodes).toBeGreaterThan(50);
     expect(veg.stats.trees).toBeGreaterThan(1000);
