@@ -1,0 +1,28 @@
+{
+  "name": "hollow-atlas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Hollow Atlas: The Unmapped Kingdoms \u2014 a painterly pixelated first-person fantasy exploration game for the browser.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "screenshots": "TITLE=1 node scripts/shoot.mjs docs/screenshots scripts/views.json"
+  },
+  "dependencies": {
+    "@fontsource/im-fell-english": "^5.2.5",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/three": "0.180.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "3.2.7"
+  }
+}
