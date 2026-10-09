@@ -4,6 +4,8 @@
  * real action; menus can be navigated by keyboard and closed with Esc.
  */
 import type { Settings } from '../app/settings';
+import type { WeaponGenome } from '../gameplay/weapons';
+import { RARITY_COLOURS } from '../gameplay/luck';
 
 type PanelId = 'title' | 'new-journey' | 'settings' | 'credits' | 'loading' | 'intro' | 'pause';
 
@@ -121,13 +123,54 @@ export class UI {
     return $<HTMLInputElement>('#seed-input');
   }
 
-  prompt(text: string | null): void {
+  prompt(text: string | null, color?: string): void {
     if (!text) {
       this.promptEl.hidden = true;
       return;
     }
     this.promptEl.hidden = false;
-    this.promptEl.innerHTML = `<b>E</b> — ${escapeHtml(text)}`;
+    const body = color ? `<span style="color:${color}">${escapeHtml(text)}</span>` : escapeHtml(text);
+    this.promptEl.innerHTML = `<b>E</b> — ${body}`;
+  }
+
+  private cardTimer = 0;
+  private readonly cardEl = $<HTMLElement>('#hud .weapon-card');
+
+  /** Show a weapon's card; seconds = 0 keeps it until toggled. */
+  weaponCard(w: WeaponGenome | null, kicker = '', seconds = 0): void {
+    if (!w) {
+      this.cardEl.hidden = true;
+      this.cardTimer = 0;
+      return;
+    }
+    const el = this.cardEl;
+    const colour = RARITY_COLOURS[w.rarity];
+    el.style.borderColor = colour;
+    el.querySelector('.wc-kicker')!.textContent = kicker;
+    const name = el.querySelector<HTMLElement>('.wc-name')!;
+    name.textContent = w.title ?? w.name;
+    name.style.color = colour;
+    el.querySelector('.wc-title')!.textContent = w.title ? w.name : '';
+    el.querySelector('.wc-meta')!.textContent = `${w.rarity} · ${w.condition} · ${w.material.name.toLowerCase()} ${w.cls} · ${w.hands === 2 ? 'two-handed' : 'one-handed'}`;
+    const st = w.stats;
+    el.querySelector('.wc-stats')!.innerHTML = [
+      ['Damage', st.damage.toFixed(1)],
+      ['Speed', st.speed.toFixed(2)],
+      ['Reach', `${st.reach.toFixed(1)} m`],
+      ['Weight', `${st.weight.toFixed(1)} kg`],
+      ['Stamina', st.stamina.toFixed(0)],
+      ['Critical', `${Math.round(st.crit * 100)}%`],
+    ]
+      .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
+      .join('');
+    el.querySelector('.wc-affixes')!.innerHTML = w.affixes.map((a) => `<li class="${a.kind}"><b>${escapeHtml(a.prefix)}</b> — ${escapeHtml(a.effect)}</li>`).join('');
+    el.querySelector('.wc-lore')!.textContent = w.lore;
+    el.hidden = false;
+    this.cardTimer = seconds;
+  }
+
+  get weaponCardVisible(): boolean {
+    return !this.cardEl.hidden;
   }
 
   hint(html: string | null): void {
@@ -157,6 +200,10 @@ export class UI {
     if (this.messageTimer > 0) {
       this.messageTimer -= dt;
       if (this.messageTimer <= 0) this.messageEl.hidden = true;
+    }
+    if (this.cardTimer > 0) {
+      this.cardTimer -= dt;
+      if (this.cardTimer <= 0) this.cardEl.hidden = true;
     }
     if (this.bannerTimer > 0) {
       this.bannerTimer -= dt;

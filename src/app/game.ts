@@ -19,6 +19,9 @@ import { Guidance } from './guidance';
 import { canonicalizeSeed } from '../core/rng';
 import { REFERENCE_SEED } from '../world/plan';
 import { damp, clamp } from '../core/math';
+import { starterWeapon } from '../gameplay/loot';
+import { RARITY_COLOURS } from '../gameplay/luck';
+import type { WeaponGenome } from '../gameplay/weapons';
 
 type State = 'boot' | 'title' | 'loading' | 'intro' | 'capture' | 'playing' | 'paused';
 
@@ -43,6 +46,8 @@ export class Game {
   world: WorldRuntime | null = null;
   player: CharacterController | null = null;
   private guidance: Guidance | null = null;
+  /** The weapon in hand (procedurally generated). */
+  weapon: WeaponGenome | null = null;
   private readonly sun = new THREE.DirectionalLight();
   private readonly hemi = new THREE.HemisphereLight();
   private readonly sky = createSky();
@@ -164,6 +169,7 @@ export class Game {
     this.world = w;
     this.scene.add(w.group);
     this.player = new CharacterController(w.collision, w.plan.spawn.x, w.plan.spawn.z);
+    this.equip(starterWeapon(w.seed));
     this.yaw = w.plan.spawn.yaw;
     this.titleYaw = this.yaw;
     this.pitch = 0.02;
@@ -188,6 +194,9 @@ export class Game {
       return;
     }
     const w = this.world!;
+    // A new journey starts fresh: finds restored, the humble starting blade in hand.
+    w.loot.reset();
+    this.equip(starterWeapon(w.seed));
     this.player!.teleport(w.plan.spawn.x, w.plan.spawn.z);
     this.yaw = w.plan.spawn.yaw;
     this.pitch = -0.28;
@@ -341,6 +350,11 @@ export class Game {
       }
     }
     if (code === 'Enter' && this.ui.top === 'new-journey') void this.beginJourney();
+  }
+
+  private equip(w: WeaponGenome): void {
+    this.weapon = w;
+    this.viewModel.setWeapon(w);
   }
 
   private applySettings(s: Settings): void {
@@ -540,12 +554,36 @@ export class Game {
     if (Math.floor(p.stride / strideLen) !== Math.floor(this.lastStride / strideLen) && p.onGround) this.audio.footstep(this.surfaceAt(p.x, p.z), sprint ? 1.2 : 0.9);
     this.lastStride = p.stride;
 
-    // Interactables: nearest one in front within reach.
+    // Interactables (signs, stones, weapon finds): nearest one in front within reach.
     const camDir = new THREE.Vector3();
     this.camera.getWorldDirection(camDir);
-    let best: (typeof w.interactables)[number] | null = null;
+    type Target = { position: THREE.Vector3; label: string; color?: string; act: () => void };
+    const targets: Target[] = w.interactables.map((it) => ({
+      position: it.position,
+      label: it.label,
+      act: () => {
+        this.ui.message(it.text, 9);
+        g.state.interacted = true;
+        this.audio.click();
+      },
+    }));
+    for (const f of w.loot.finds) {
+      targets.push({
+        position: f.anchor,
+        label: `Take ${f.weapon.title ?? f.weapon.name}`,
+        color: RARITY_COLOURS[f.weapon.rarity],
+        act: () => {
+          const taken = w.loot.take(f.find.id, this.weapon!);
+          this.equip(taken);
+          this.ui.weaponCard(taken, `${f.find.story} You take it up.`, 10);
+          this.audio.whoosh();
+          g.state.interacted = true;
+        },
+      });
+    }
+    let best: Target | null = null;
     let bestScore = 0;
-    for (const it of w.interactables) {
+    for (const it of targets) {
       const d = it.position.distanceTo(this.camera.position);
       if (d > 3.2) continue;
       const dir = it.position.clone().sub(this.camera.position).normalize();
@@ -555,11 +593,11 @@ export class Game {
         bestScore = score;
       }
     }
-    this.ui.prompt(best ? best.label : null);
-    if (best && this.input.consume('KeyE')) {
-      this.ui.message(best.text, 9);
-      g.state.interacted = true;
-      this.audio.click();
+    this.ui.prompt(best ? best.label : null, best?.color);
+    if (best && this.input.consume('KeyE')) best.act();
+    if (this.input.consume('KeyI') && this.weapon) {
+      if (this.ui.weaponCardVisible) this.ui.weaponCard(null);
+      else this.ui.weaponCard(this.weapon, 'In your hand');
     }
   }
 
@@ -605,7 +643,8 @@ export class Game {
         `seed ${w.seed}  gen v${w.plan.generatorVersion}`,
         `pos ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}  yaw ${this.yaw.toFixed(2)}  ground ${p.onGround ? 'yes' : 'no'}`,
         `terrain nodes ${t.nodes} queued ${t.queued} build ${t.lastBuildMs.toFixed(1)}ms max ${t.maxBuildMs.toFixed(1)}ms`,
-        `veg chunks ${v.chunks} trees ${v.trees} ground ${v.ground} grass ${v.grass} pending ${v.pending}`,
+        `veg chunks ${v.chunks} trees ${v.trees} ground ${v.ground} grass ${v.grass} pending ${v.pending} rebuild ${v.rebuildMs.toFixed(1)}ms`,
+        `gen workers ${w.pool.stats.workers || 'none (inline)'} jobs ${w.pool.stats.jobs} queued ${w.pool.stats.queued}`,
         `colliders ${c.boxes} boxes ${c.circles} circles ${c.dynamic} trunks`,
         `streaming cpu ${(this.perf.worldMs[this.perf.worldMs.length - 1] ?? 0).toFixed(2)} ms (max ${Math.max(0, ...this.perf.worldMs).toFixed(1)})`,
         `validation ${w.validation.ok ? 'OK' : 'ISSUES ' + w.validation.issues.length} (${w.validation.checks} checks)`,
@@ -656,6 +695,11 @@ export class Game {
         this.autopilot = { road, index: 0, speed, perFrame };
       },
       errorList: () => this.errors.slice(),
+      weapon: () => this.weapon,
+      finds: () => this.world?.loot.finds.map((f) => ({ id: f.find.id, x: f.find.x, z: f.find.z, anchor: f.anchor.toArray(), name: f.weapon.title ?? f.weapon.name, rarity: f.weapon.rarity })),
+      equipSeed: (seed: number, luck = 0) => {
+        void import('../gameplay/weapons').then((m) => this.equip(m.generateWeapon(seed, { luck })));
+      },
       autopilotActive: () => this.autopilot !== null,
       perf: () => {
         const a = this.perf.worldMs.slice().sort((x, y) => x - y);

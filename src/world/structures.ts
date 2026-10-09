@@ -162,6 +162,11 @@ function prop(b: MeshBuilder, p: PropPlan, terrain: Terrain, world: CollisionWor
       world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 1.1, hd: 0.55, y0: y - 0.5, y1: y + 0.95, tag: p.id });
       break;
     }
+    case 'chopping-block': {
+      b.cylinder('bark', m, 0, -0.2, 0, 0.38, 0.34, 0.7, 8, { color: col('#c0b0a0'), aoBottom: 0.3 }, { capTop: true, flat: true });
+      world.addCircle({ x: p.x, z: p.z, r: 0.4, y0: y - 0.5, y1: y + 0.5, tag: p.id });
+      break;
+    }
     case 'bench': {
       b.box('planks', m, 0, 0.45, 0, 1.6, 0.08, 0.4, { color: col('#c0a080') });
       world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.8, hd: 0.2, y0: y, y1: y + 0.5, tag: p.id });

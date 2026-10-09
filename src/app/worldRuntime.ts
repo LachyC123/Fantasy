@@ -6,7 +6,8 @@
 import * as THREE from 'three';
 import { generateWorldPlan, createTerrain } from '../world/plan';
 import { Ecology } from '../world/ecology';
-import { TerrainColorizer } from '../world/terrainColor';
+import { GenCore } from '../world/genCore';
+import { GenPool } from '../world/genPool';
 import { TerrainStreamer } from '../world/terrainStreamer';
 import { VegetationStreamer } from '../world/vegetationStreamer';
 import { buildStructures, type StructureResult } from '../world/structures';
@@ -20,6 +21,7 @@ import type { Terrain } from '../world/terrain';
 import type { WorldPlan } from '../world/types';
 import { validateWorld, type ValidationReport } from '../world/validation';
 import { deriveSeed } from '../core/rng';
+import { LootSystem } from '../gameplay/loot';
 
 export interface Interactable {
   id: string;
@@ -42,8 +44,10 @@ export class WorldRuntime {
   birds!: Birds;
   smoke!: ChimneySmoke;
   motes!: AmbientMotes;
+  loot!: LootSystem;
   interactables: Interactable[] = [];
   validation!: ValidationReport;
+  pool!: GenPool;
   private collidersVersion = -1;
   timings: Record<string, number> = {};
 
@@ -83,19 +87,22 @@ export class WorldRuntime {
     mark('validation');
 
     const spawn = new THREE.Vector3(this.plan.spawn.x, 0, this.plan.spawn.z);
-    const colorizer = new TerrainColorizer(this.plan, this.terrain, this.ecology);
+    // Generation workers rebuild the same deterministic world from the seed.
+    this.pool = new GenPool(this.seed, new GenCore(this.seed, this.plan));
     const terrainMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, map: getTextures().grass }));
     // Terrain detail texture repeats every 4 m (geometry UVs are world/4).
-    this.terrainStreamer = new TerrainStreamer(this.terrain, colorizer, terrainMat);
+    this.terrainStreamer = new TerrainStreamer(this.pool, terrainMat);
     this.group.add(this.terrainStreamer.group);
-    await this.terrainStreamer.buildAllAsync(spawn, (d, n) => progress('Shaping hills and hollows', 0.12 + 0.38 * (d / Math.max(1, n))));
+    const terrainDone = this.terrainStreamer.buildAllAsync(spawn, (d, n) => progress('Shaping hills and hollows', 0.12 + 0.38 * (d / Math.max(1, n))));
+    await Promise.all([terrainDone, this.pool.drain()]);
     mark('terrain');
 
     progress('Growing the old woods', 0.5);
     await yieldFrame();
-    this.vegetation = new VegetationStreamer(this.ecology, this.materials, { treeFar: quality.treeFar });
+    this.vegetation = new VegetationStreamer(this.pool, this.materials, { treeFar: quality.treeFar });
     this.group.add(this.vegetation.group);
-    await this.vegetation.prepareAsync(spawn, (d, n) => progress('Growing the old woods', 0.5 + 0.45 * (d / Math.max(1, n))));
+    const vegDone = this.vegetation.prepareAsync(spawn, (d, n) => progress('Growing the old woods', 0.5 + 0.45 * (d / Math.max(1, n))));
+    await Promise.all([vegDone, this.pool.drain()]);
     this.syncTreeColliders();
     mark('vegetation');
 
@@ -117,6 +124,8 @@ export class WorldRuntime {
     this.group.add(this.smoke.pool.points);
     this.motes = new AmbientMotes();
     this.group.add(this.motes.pool.points);
+    this.loot = new LootSystem(this.plan, this.terrain, this.materials);
+    this.group.add(this.loot.group);
 
     // Readable signs and stones.
     for (const p of this.plan.props) {
@@ -153,10 +162,12 @@ export class WorldRuntime {
   }
 
   update(dt: number, cam: THREE.Vector3, wind: THREE.Vector2, budgetMs: number): void {
-    this.terrainStreamer.update(cam, budgetMs * 0.5);
-    this.vegetation.update(cam, budgetMs * 0.5);
+    this.pool.tickInline(budgetMs); // only does work when workers are unavailable
+    this.terrainStreamer.update(cam);
+    this.vegetation.update(cam);
     this.syncTreeColliders();
     this.birds.update(dt);
+    this.loot.update(dt, cam);
     this.smoke.update(dt, wind);
     this.motes.update(
       dt,
@@ -173,6 +184,7 @@ export class WorldRuntime {
   }
 
   dispose(): void {
+    this.pool?.dispose();
     this.terrainStreamer?.dispose();
     this.vegetation?.dispose();
     this.group.traverse((o) => {

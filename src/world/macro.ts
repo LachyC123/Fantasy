@@ -91,12 +91,12 @@ export class MacroField {
     const cd = Math.sqrt(cdx * cdx + cdz * cdz);
     const cragFall = 1 - smoothstep(p.plateauRadius - 10, p.plateauRadius + 300, cd + 35 * ns.sample(x / 160, z / 160));
     h += p.cragHeight * Math.pow(cragFall, 0.85);
-    // Rocky ribs on the crag's flanks.
-    h += 9 * cragFall * (1 - cragFall) * 4 * (this.nRidge.ridged(x / 90, z / 90, 3) - 0.4);
+    // Rocky ribs on the crag's flanks (only evaluated where they matter).
+    if (cragFall > 0.001 && cragFall < 0.999) h += 9 * cragFall * (1 - cragFall) * 4 * (this.nRidge.ridged(x / 90, z / 90, 3) - 0.4);
 
     // Hills behind the castle and the far blue mountains.
     const north = smoothstep(-1950, -2600, z);
-    h += north * (35 + 45 * ns.fbm(wx / 450, wz / 450, 3));
+    if (north > 0) h += north * (35 + 45 * ns.fbm(wx / 450, wz / 450, 3));
     const mountains = smoothstep(-3300, -5200, z) + smoothstep(1500, 2900, dx);
     const mt = clamp(mountains, 0, 1);
     if (mt > 0) {

@@ -1,20 +1,21 @@
 /**
- * Vegetation streaming. Scatter data is computed per 64 m chunk (pure,
- * deterministic) and cached as packed instance matrices; every frame the
- * active chunks are concatenated into a small set of shared InstancedMeshes
- * (one per species × variant × LOD × material) so draw calls stay flat no
- * matter how far you travel.
+ * Vegetation streaming. Scatter data is generated per 64 m chunk in the
+ * generation workers (pure, deterministic) and arrives as packed instance
+ * matrices. Active chunks are concatenated into a small set of shared
+ * InstancedMeshes (one per species × variant × LOD × material), so draw calls
+ * stay flat however far you travel. A batch is only re-uploaded when the set
+ * of chunks feeding it changes.
  */
 import * as THREE from 'three';
-import type { Ecology, GroundLayer, Placement, TreeSpecies } from './ecology';
+import type { TreeSpecies } from './ecology';
 import { TREE_SPECIES } from './ecology';
 import type { MaterialLibrary, MaterialName } from '../rendering/materials';
 import { generateTree, type TreeAsset } from '../assets/trees';
 import { groundAsset, type Asset } from '../assets/plants';
+import { GROUND_LAYERS, GROUND_VARIANTS, TREE_VARIANTS, type GrassChunkData, type GroundChunkData, type Packed, type TreeChunkData } from './vegPack';
+import type { GenPool } from './genPool';
 
-export const TREE_VARIANTS = 3;
-const GROUND_VARIANTS = 3;
-const GROUND_LAYERS: GroundLayer[] = ['bush', 'fern', 'flower', 'rock', 'boulder', 'log', 'mushroom', 'stump'];
+export { TREE_VARIANTS } from './vegPack';
 
 export interface VegetationOptions {
   chunk: number;
@@ -28,23 +29,14 @@ export interface VegetationOptions {
 
 const DEFAULTS: VegetationOptions = { chunk: 64, treeFar: 1300, treeMid: 460, treeNear: 110, groundRadius: 150, grassRadius: 70, colliderRadius: 90 };
 
-interface Packed {
-  matrices: Float32Array;
-  colors: Float32Array;
-  count: number;
-}
-
 interface ChunkData {
   cx: number;
   cz: number;
-  /** key `${species}:${variant}` → packed (full density, then two thinned sets for distance). */
-  trees: Map<string, Packed>;
-  thin: Map<string, Packed>;
-  thinner: Map<string, Packed>;
-  treeList: { species: TreeSpecies; p: Placement }[];
-  ground?: Map<string, Packed>;
-  groundList?: { layer: GroundLayer; p: Placement }[];
-  grass?: { grass: Packed; wheat: Packed[] };
+  trees?: TreeChunkData;
+  treeMaps?: { full: Map<string, Packed>; thin: Map<string, Packed>; thinner: Map<string, Packed> };
+  ground?: GroundChunkData;
+  groundMap?: Map<string, Packed>;
+  grass?: GrassChunkData;
 }
 
 export interface TreeCollider {
@@ -56,6 +48,7 @@ export interface TreeCollider {
 class InstanceBatch {
   readonly meshes: THREE.InstancedMesh[] = [];
   private capacity = 0;
+  private signature = '';
 
   constructor(
     private readonly parent: THREE.Group,
@@ -64,12 +57,13 @@ class InstanceBatch {
     readonly name: string,
   ) {}
 
-  /** Upload concatenated instance data; grows capacity geometrically. */
-  set(chunks: Packed[]): number {
+  /** Upload concatenated instance data only if the contributing chunks changed. */
+  set(chunks: Packed[], signature: string): number {
     let total = 0;
     for (const c of chunks) total += c.count;
+    if (signature === this.signature) return total;
+    this.signature = signature;
     if (total > this.capacity) this.allocate(Math.max(64, Math.ceil(total * 1.5)));
-    if (this.meshes.length === 0) return 0;
     for (const m of this.meshes) {
       const mat = m.instanceMatrix.array as Float32Array;
       const colr = m.instanceColor!.array as Float32Array;
@@ -80,7 +74,12 @@ class InstanceBatch {
         off += c.count;
       }
       m.count = total;
+      // Upload only the used range.
+      m.instanceMatrix.clearUpdateRanges();
+      m.instanceMatrix.addUpdateRange(0, Math.max(1, total) * 16);
       m.instanceMatrix.needsUpdate = true;
+      m.instanceColor!.clearUpdateRanges();
+      m.instanceColor!.addUpdateRange(0, Math.max(1, total) * 3);
       m.instanceColor!.needsUpdate = true;
       m.visible = total > 0;
     }
@@ -98,6 +97,7 @@ class InstanceBatch {
       const m = new THREE.InstancedMesh(geo, mat, cap);
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+      m.instanceColor.setUsage(THREE.DynamicDrawUsage);
       m.frustumCulled = false;
       m.castShadow = this.castShadow;
       m.receiveShadow = true;
@@ -117,48 +117,32 @@ class InstanceBatch {
   }
 }
 
-const _m = new THREE.Matrix4();
-const _q = new THREE.Quaternion();
-const _s = new THREE.Vector3();
-const _p = new THREE.Vector3();
-const _up = new THREE.Vector3(0, 1, 0);
+type Need = 'trees' | 'ground' | 'grass';
 
-function pack(list: Placement[], tintRange: [number, number], tilt = 0): Packed {
-  const matrices = new Float32Array(list.length * 16);
-  const colors = new Float32Array(list.length * 3);
-  list.forEach((pl, i) => {
-    _q.setFromAxisAngle(_up, pl.yaw);
-    if (tilt) _q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler((pl.tint - 0.5) * tilt, 0, (pl.variant / 3 - 0.5) * tilt)));
-    _m.compose(_p.set(pl.x, pl.y, pl.z), _q, _s.setScalar(pl.scale));
-    _m.toArray(matrices, i * 16);
-    const k = tintRange[0] + (tintRange[1] - tintRange[0]) * pl.tint;
-    colors[i * 3] = k * (0.97 + pl.tint * 0.06);
-    colors[i * 3 + 1] = k;
-    colors[i * 3 + 2] = k * (1.02 - pl.tint * 0.06);
-  });
-  return { matrices, colors, count: list.length };
-}
+/** Vegetation jobs rank after terrain's near nodes (terrain uses log2(size)·1e5 + distance). */
+const VEG_PRIORITY = 600000;
 
 export class VegetationStreamer {
   readonly group = new THREE.Group();
   private readonly opts: VegetationOptions;
   private readonly chunks = new Map<string, ChunkData>();
+  private readonly requested = new Set<string>();
   private readonly treeAssets = new Map<string, TreeAsset>();
   private readonly nearBatches = new Map<string, InstanceBatch>();
   private readonly midBatches = new Map<string, InstanceBatch>();
   private readonly farBatches = new Map<string, InstanceBatch>();
   private readonly groundBatches = new Map<string, InstanceBatch>();
-  private grassBatch!: InstanceBatch;
-  private wheatBatches: InstanceBatch[] = [];
+  private readonly grassBatch: InstanceBatch;
+  private readonly wheatBatches: InstanceBatch[];
   private lastCell = '';
-  private pending: { cx: number; cz: number; need: 'trees' | 'ground' | 'grass' }[] = [];
   private dirty = true;
+  private lastRebuild = 0;
   colliders: TreeCollider[] = [];
   collidersVersion = 0;
-  stats = { chunks: 0, trees: 0, ground: 0, grass: 0, pending: 0 };
+  stats = { chunks: 0, trees: 0, ground: 0, grass: 0, pending: 0, rebuildMs: 0 };
 
   constructor(
-    private readonly ecology: Ecology,
+    private readonly pool: GenPool,
     materials: MaterialLibrary,
     opts: Partial<VegetationOptions> = {},
   ) {
@@ -191,198 +175,165 @@ export class VegetationStreamer {
     return this.treeAssets.get(`${species}:${variant % TREE_VARIANTS}`)!;
   }
 
-  private chunkKey(cx: number, cz: number): string {
-    return `${cx}:${cz}`;
-  }
-
-  private ensureTrees(cx: number, cz: number): ChunkData {
-    const key = this.chunkKey(cx, cz);
+  private chunk(cx: number, cz: number): ChunkData {
+    const key = `${cx}:${cz}`;
     let c = this.chunks.get(key);
-    if (c) return c;
-    const size = this.opts.chunk;
-    const scattered = this.ecology.scatterTrees(cx * size, cz * size, size);
-    const trees = new Map<string, Packed>();
-    const thin = new Map<string, Packed>();
-    const thinner = new Map<string, Packed>();
-    const treeList: ChunkData['treeList'] = [];
-    for (const [species, list] of scattered) {
-      const byVariant: Placement[][] = Array.from({ length: TREE_VARIANTS }, () => []);
-      for (const p of list) {
-        p.variant %= TREE_VARIANTS;
-        byVariant[p.variant]!.push(p);
-        treeList.push({ species, p });
-      }
-      byVariant.forEach((l, v) => {
-        if (!l.length) return;
-        const key = `${species}:${v}`;
-        trees.set(key, pack(l, [0.82, 1.12]));
-        // Distance thinning: keep a deterministic subset, scaled up to hold canopy cover.
-        const t1 = l.filter((p) => p.tint < 0.42).map((p) => ({ ...p, scale: p.scale * 1.25 }));
-        const t2 = l.filter((p) => p.tint < 0.26).map((p) => ({ ...p, scale: p.scale * 1.45 }));
-        if (t1.length) thin.set(key, pack(t1, [0.82, 1.12]));
-        if (t2.length) thinner.set(key, pack(t2, [0.82, 1.12]));
-      });
-    }
-    c = { cx, cz, trees, thin, thinner, treeList };
-    this.chunks.set(key, c);
+    if (!c) this.chunks.set(key, (c = { cx, cz }));
     return c;
   }
 
-  private ensureGround(c: ChunkData): void {
-    if (c.ground) return;
-    const size = this.opts.chunk;
-    const scattered = this.ecology.scatterGround(c.cx * size, c.cz * size, size);
-    c.ground = new Map();
-    c.groundList = [];
-    for (const [layer, list] of scattered) {
-      const byVariant: Placement[][] = Array.from({ length: GROUND_VARIANTS }, () => []);
-      for (const p of list) {
-        p.variant %= GROUND_VARIANTS;
-        byVariant[p.variant]!.push(p);
-        c.groundList.push({ layer, p });
-      }
-      byVariant.forEach((l, v) => {
-        if (l.length) c.ground!.set(`${layer}:${v}`, pack(l, [0.8, 1.15], layer === 'rock' ? 0.4 : 0));
-      });
-    }
-  }
-
-  private ensureGrass(c: ChunkData): void {
-    if (c.grass) return;
-    const size = this.opts.chunk;
-    const { grass, wheat } = this.ecology.scatterGrass(c.cx * size, c.cz * size, size);
-    c.grass = { grass: pack(grass, [0.75, 1.15]), wheat: [0, 1].map((v) => pack(wheat.filter((w) => w.variant === v), [0.85, 1.1])) };
-  }
-
-  /** Synchronously compute everything around a point (loading screen). */
-  async prepareAsync(cam: THREE.Vector3, onProgress: (done: number, total: number) => void): Promise<void> {
-    const list = this.requiredChunks(cam);
-    let done = 0;
-    let t0 = performance.now();
-    for (const r of list) {
-      const c = this.ensureTrees(r.cx, r.cz);
-      if (r.d < this.opts.groundRadius + this.opts.chunk) this.ensureGround(c);
-      if (r.d < this.opts.grassRadius + this.opts.chunk) this.ensureGrass(c);
-      done++;
-      if (performance.now() - t0 > 30) {
-        onProgress(done, list.length);
-        await new Promise((res) => setTimeout(res, 0));
-        t0 = performance.now();
-      }
-    }
-    onProgress(list.length, list.length);
-    this.dirty = true;
-    this.lastCell = '';
-    this.update(cam, 1000);
-  }
-
-  private requiredChunks(cam: THREE.Vector3): { cx: number; cz: number; d: number }[] {
+  /** Work each chunk still needs at this camera position, with priorities. */
+  private plan(cam: THREE.Vector3): { cx: number; cz: number; need: Need; pr: number }[] {
     const size = this.opts.chunk;
     const R = this.opts.treeFar;
     const ccx = Math.floor(cam.x / size);
     const ccz = Math.floor(cam.z / size);
     const rc = Math.ceil(R / size);
-    const out: { cx: number; cz: number; d: number }[] = [];
+    const out: { cx: number; cz: number; need: Need; pr: number }[] = [];
     for (let dx = -rc; dx <= rc; dx++) {
       for (let dz = -rc; dz <= rc; dz++) {
         const cx = ccx + dx;
         const cz = ccz + dz;
         const d = Math.hypot((cx + 0.5) * size - cam.x, (cz + 0.5) * size - cam.z);
         if (d > R + size) continue;
-        out.push({ cx, cz, d });
+        const c = this.chunks.get(`${cx}:${cz}`);
+        if (!c?.trees) out.push({ cx, cz, need: 'trees', pr: d });
+        if (d < this.opts.groundRadius + size && !c?.ground) out.push({ cx, cz, need: 'ground', pr: d * 0.8 });
+        if (d < this.opts.grassRadius + size && !c?.grass) out.push({ cx, cz, need: 'grass', pr: d * 0.6 });
       }
     }
-    out.sort((a, b) => a.d - b.d);
     return out;
   }
 
-  update(cam: THREE.Vector3, budgetMs: number): void {
-    const size = this.opts.chunk;
+  private request(cx: number, cz: number, need: Need, pr: number): Promise<void> {
+    const key = `${need}:${cx}:${cz}`;
+    this.requested.add(key);
+    const req = this.pool.request<TreeChunkData | GroundChunkData | GrassChunkData>({ kind: need, cx, cz, size: this.opts.chunk }, VEG_PRIORITY + pr);
+    return req.promise.then((data) => {
+      this.requested.delete(key);
+      const c = this.chunk(cx, cz);
+      if (need === 'trees') {
+        const t = data as TreeChunkData;
+        c.trees = t;
+        c.treeMaps = { full: new Map(t.trees), thin: new Map(t.thin), thinner: new Map(t.thinner) };
+      } else if (need === 'ground') {
+        const g = data as GroundChunkData;
+        c.ground = g;
+        c.groundMap = new Map(g.ground);
+      } else c.grass = data as GrassChunkData;
+      this.dirty = true;
+    });
+  }
+
+  /** Generate everything needed around a point (loading screen). */
+  async prepareAsync(cam: THREE.Vector3, onProgress: (done: number, total: number) => void): Promise<void> {
+    const jobs = this.plan(cam);
+    let done = 0;
+    await Promise.all(
+      jobs.map((j) =>
+        this.request(j.cx, j.cz, j.need, j.pr).then(() => {
+          done++;
+          if (done % 16 === 0 || done === jobs.length) onProgress(done, jobs.length);
+        }),
+      ),
+    );
+    this.lastCell = '';
+    this.update(cam);
+    this.rebuild(cam);
+  }
+
+  update(cam: THREE.Vector3): void {
     const cell = `${Math.floor(cam.x / 16)}:${Math.floor(cam.z / 16)}`;
     if (cell !== this.lastCell) {
       this.lastCell = cell;
-      this.pending = [];
-      for (const r of this.requiredChunks(cam)) {
-        const c = this.chunks.get(this.chunkKey(r.cx, r.cz));
-        if (!c) this.pending.push({ cx: r.cx, cz: r.cz, need: 'trees' });
-        if (r.d < this.opts.groundRadius + size && !c?.ground) this.pending.push({ cx: r.cx, cz: r.cz, need: 'ground' });
-        if (r.d < this.opts.grassRadius + size && !c?.grass) this.pending.push({ cx: r.cx, cz: r.cz, need: 'grass' });
+      const jobs = this.plan(cam);
+      const wanted = new Map(jobs.map((j) => [`${j.need}:${j.cx}:${j.cz}`, j.pr]));
+      // Drop queued chunk work that is no longer needed; re-rank the rest.
+      this.pool.reprioritise((job) => {
+        if (job.kind === 'terrain') return undefined;
+        const key = `${job.kind}:${job.cx}:${job.cz}`;
+        const pr = wanted.get(key);
+        if (pr === undefined) {
+          this.requested.delete(key);
+          return null;
+        }
+        return VEG_PRIORITY + pr;
+      });
+      for (const j of jobs) {
+        if (!this.requested.has(`${j.need}:${j.cx}:${j.cz}`)) void this.request(j.cx, j.cz, j.need, j.pr);
       }
-      // Nearest work first: grass and ground cover matter most up close.
       this.dirty = true;
     }
-    const t0 = performance.now();
-    let changed = false;
-    while (this.pending.length && performance.now() - t0 < budgetMs) {
-      const job = this.pending.shift()!;
-      const c = this.ensureTrees(job.cx, job.cz);
-      if (job.need === 'ground') this.ensureGround(c);
-      if (job.need === 'grass') this.ensureGrass(c);
-      changed = true;
-    }
-    this.stats.pending = this.pending.length;
-    if (changed) this.dirty = true;
-    if (this.dirty) this.rebuild(cam);
+    this.stats.pending = this.requested.size;
+    // Rebuild at most ~6 times a second while data streams in.
+    const now = performance.now();
+    if (this.dirty && now - this.lastRebuild > 160) this.rebuild(cam);
   }
 
   private rebuild(cam: THREE.Vector3): void {
+    const t0 = performance.now();
     this.dirty = false;
+    this.lastRebuild = t0;
     const size = this.opts.chunk;
-    const nearLists = new Map<string, Packed[]>();
-    const midLists = new Map<string, Packed[]>();
-    const farLists = new Map<string, Packed[]>();
-    const groundLists = new Map<string, Packed[]>();
+    type Which = 'near' | 'mid' | 'far' | 'ground';
+    const lists: Record<Which, Map<string, Packed[]>> = { near: new Map(), mid: new Map(), far: new Map(), ground: new Map() };
+    const sigs: Record<Which, Map<string, string>> = { near: new Map(), mid: new Map(), far: new Map(), ground: new Map() };
+    const add = (which: Which, key: string, p: Packed, tag: string): void => {
+      let l = lists[which].get(key);
+      if (!l) lists[which].set(key, (l = []));
+      l.push(p);
+      sigs[which].set(key, (sigs[which].get(key) ?? '') + tag);
+    };
     const grass: Packed[] = [];
     const wheat: Packed[][] = [[], []];
+    let grassSig = '';
     const colliders: TreeCollider[] = [];
     let chunks = 0;
-    for (const c of this.chunks.values()) {
+    // Deterministic iteration order keeps batch signatures stable.
+    const ordered = [...this.chunks.values()].sort((a, b) => a.cx - b.cx || a.cz - b.cz);
+    for (const c of ordered) {
       const d = Math.hypot((c.cx + 0.5) * size - cam.x, (c.cz + 0.5) * size - cam.z);
       if (d > this.opts.treeFar + size) continue;
       chunks++;
-      const lod = d < this.opts.treeNear ? 0 : d < this.opts.treeMid ? 1 : 2;
-      const source = lod < 2 ? c.trees : d < (this.opts.treeMid + this.opts.treeFar) / 2 ? c.thin : c.thinner;
-      const target = lod === 0 ? nearLists : lod === 1 ? midLists : farLists;
-      for (const [key, p] of source) {
-        let l = target.get(key);
-        if (!l) target.set(key, (l = []));
-        l.push(p);
+      const tag = `${c.cx},${c.cz};`;
+      if (c.treeMaps) {
+        const lod: Which = d < this.opts.treeNear ? 'near' : d < this.opts.treeMid ? 'mid' : 'far';
+        const thinner = d >= (this.opts.treeMid + this.opts.treeFar) / 2;
+        const source = lod !== 'far' ? c.treeMaps.full : thinner ? c.treeMaps.thinner : c.treeMaps.thin;
+        const sourceTag = lod !== 'far' ? '' : thinner ? 'tt' : 't';
+        for (const [key, p] of source) add(lod, key, p, tag + sourceTag);
       }
-      if (c.ground && d < this.opts.groundRadius + size * 0.5) {
-        for (const [key, p] of c.ground) {
-          let l = groundLists.get(key);
-          if (!l) groundLists.set(key, (l = []));
-          l.push(p);
-        }
-      }
+      if (c.groundMap && d < this.opts.groundRadius + size * 0.5) for (const [key, p] of c.groundMap) add('ground', key, p, tag);
       if (c.grass && d < this.opts.grassRadius + size * 0.5) {
         grass.push(c.grass.grass);
         wheat[0]!.push(c.grass.wheat[0]!);
         wheat[1]!.push(c.grass.wheat[1]!);
+        grassSig += tag;
       }
       if (d < this.opts.colliderRadius + size) {
-        for (const { species, p } of c.treeList) {
-          const a = this.treeAsset(species, p.variant);
-          colliders.push({ x: p.x, z: p.z, r: Math.max(0.2, a.trunkRadius * p.scale * 0.95) });
-        }
-        if (c.groundList) {
-          for (const { layer, p } of c.groundList) {
-            if (layer === 'boulder') colliders.push({ x: p.x, z: p.z, r: 1.4 * p.scale });
-            else if (layer === 'stump') colliders.push({ x: p.x, z: p.z, r: 0.4 * p.scale });
+        const l = c.trees?.list;
+        if (l) {
+          for (let i = 0; i < l.length; i += 5) {
+            const asset = this.treeAsset(TREE_SPECIES[l[i]!]!, l[i + 1]!);
+            colliders.push({ x: l[i + 2]!, z: l[i + 3]!, r: Math.max(0.2, asset.trunkRadius * l[i + 4]! * 0.95) });
           }
         }
+        const s = c.ground?.solids;
+        if (s) for (let i = 0; i < s.length; i += 4) colliders.push({ x: s[i + 1]!, z: s[i + 2]!, r: (GROUND_LAYERS[s[i]!] === 'boulder' ? 1.4 : 0.4) * s[i + 3]! });
       }
     }
     let trees = 0;
-    for (const [key, b] of this.nearBatches) trees += b.set(nearLists.get(key) ?? []);
-    for (const [key, b] of this.midBatches) trees += b.set(midLists.get(key) ?? []);
-    for (const [key, b] of this.farBatches) trees += b.set(farLists.get(key) ?? []);
+    for (const [key, b] of this.nearBatches) trees += b.set(lists.near.get(key) ?? [], sigs.near.get(key) ?? '');
+    for (const [key, b] of this.midBatches) trees += b.set(lists.mid.get(key) ?? [], sigs.mid.get(key) ?? '');
+    for (const [key, b] of this.farBatches) trees += b.set(lists.far.get(key) ?? [], sigs.far.get(key) ?? '');
     let ground = 0;
-    for (const [key, b] of this.groundBatches) ground += b.set(groundLists.get(key) ?? []);
-    const g = this.grassBatch.set(grass);
-    this.wheatBatches.forEach((b, i) => b.set(wheat[i]!));
-    this.colliders = colliders;
-    this.collidersVersion++;
+    for (const [key, b] of this.groundBatches) ground += b.set(lists.ground.get(key) ?? [], sigs.ground.get(key) ?? '');
+    const g = this.grassBatch.set(grass, grassSig);
+    this.wheatBatches.forEach((b, i) => b.set(wheat[i]!, grassSig));
+    if (colliders.length !== this.colliders.length || colliders.some((c, i) => c.x !== this.colliders[i]!.x || c.z !== this.colliders[i]!.z)) {
+      this.colliders = colliders;
+      this.collidersVersion++;
+    }
     // Bound the cache.
     if (this.chunks.size > 2600) {
       for (const [k, c] of this.chunks) {
@@ -390,7 +341,7 @@ export class VegetationStreamer {
         if (d > this.opts.treeFar * 1.6) this.chunks.delete(k);
       }
     }
-    this.stats = { chunks, trees, ground, grass: g, pending: this.pending.length };
+    this.stats = { chunks, trees, ground, grass: g, pending: this.requested.size, rebuildMs: performance.now() - t0 };
   }
 
   dispose(): void {

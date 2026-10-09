@@ -55,6 +55,7 @@ for (const v of views) {
     if (v.tod) h.setTimeOfDay(v.tod);
     if (v.attack) h.attack();
     h.inspectViewModel(!!v.inspect);
+    if (v.equip !== undefined) h.equipSeed(v.equip, v.luck ?? 0);
   }, v);
   await page.waitForFunction(() => window.__hollowAtlas.settled(), null, { timeout: 240000 }).catch(() => console.log('not settled'));
   await page.waitForTimeout(v.wait ?? 600);

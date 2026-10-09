@@ -160,9 +160,25 @@ export interface WorldPlan {
   /** Tree-free view wedge from the spawn towards the castle (widens by `spread` per metre). */
   sightline: { from: P2; to: P2; halfWidth: number; spread: number };
   props: PropPlan[];
+  /** Weapons lying in the world; each is generated from its seed with a local luck bias. */
+  finds: WeaponFind[];
 }
 
-export type PropKind = 'well' | 'haystack' | 'cart' | 'barrel' | 'signpost' | 'waystone' | 'woodpile' | 'bench';
+export interface WeaponFind {
+  id: string;
+  x: number;
+  z: number;
+  yaw: number;
+  pose: 'lying' | 'stuck' | 'leaning';
+  seed: number;
+  /** Luck bias for the rarity/condition roll (negative = humble places). */
+  luck: number;
+  cls?: 'axe' | 'spear';
+  /** A line describing how it was left there. */
+  story: string;
+}
+
+export type PropKind = 'well' | 'haystack' | 'cart' | 'barrel' | 'signpost' | 'waystone' | 'woodpile' | 'bench' | 'chopping-block';
 
 export interface PropPlan {
   id: string;

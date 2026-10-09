@@ -61,7 +61,7 @@ export class TerrainColorizer {
     out.lerp(PAL.dry, smoothstep(0.45, 0.8, this.nPatch.sample(x / 260 + 11, z / 260)) * 0.45);
 
     // Forest floor.
-    const forest = detailed ? this.ecology.forestDensity(x, z) : this.ecology.forestBase(x, z, h);
+    const forest = detailed ? this.ecology.forestDensityAt(x, z, h) : this.ecology.forestBase(x, z, h);
     out.lerp(this.tmp.copy(PAL.forestFloor).lerp(PAL.forestDark, smoothstep(0, 0.6, fine)), smoothstep(0.15, 0.65, forest) * 0.9);
 
     // Altitude bands.

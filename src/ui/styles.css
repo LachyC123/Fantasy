@@ -374,6 +374,92 @@ code {
   font-style: italic;
 }
 
+.weapon-card {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(330px, calc(100vw - 32px));
+  padding: 14px 18px 12px;
+  background: rgba(15, 12, 22, 0.88);
+  border: 1px solid var(--panel-edge);
+  box-shadow: 0 0 0 3px rgba(10, 8, 14, 0.55);
+  font-size: 16px;
+}
+
+.weapon-card .wc-kicker {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-dim);
+}
+
+.weapon-card .wc-name {
+  margin: 2px 0 0;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.weapon-card .wc-title {
+  margin: 2px 0 0;
+  font-style: italic;
+  font-size: 16px;
+}
+
+.weapon-card .wc-meta {
+  margin: 6px 0 8px;
+  font-size: 14px;
+  color: var(--ink-dim);
+  text-transform: capitalize;
+}
+
+.weapon-card .wc-stats {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 2px 10px;
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.weapon-card dt {
+  color: var(--ink-dim);
+}
+
+.weapon-card dd {
+  margin: 0;
+}
+
+.weapon-card .wc-affixes {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.weapon-card .wc-affixes li.boon b {
+  color: #9fdc7c;
+  font-weight: 400;
+}
+
+.weapon-card .wc-affixes li.bane b {
+  color: #ff8a7a;
+  font-weight: 400;
+}
+
+.weapon-card .wc-lore {
+  margin: 0;
+  font-style: italic;
+  font-size: 14px;
+  color: #e6d6b0;
+}
+
+.weapon-card .wc-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
 #capture {
   position: absolute;
   inset: 0;

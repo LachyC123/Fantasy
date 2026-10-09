@@ -31,6 +31,7 @@ import type {
   WorldPlan,
   WallStyle,
   RoofMaterial,
+  WeaponFind,
 } from './types';
 
 export const REFERENCE_SEED = 'reference-valley';
@@ -501,6 +502,37 @@ export function generateWorldPlan(seedInput: string): WorldPlan {
     props.push({ id: `${seed}/prop/waystone`, kind: 'waystone', x: f.p.x + f.nx * 2.4, z: f.p.z + f.nz * 2.4, yaw: facing(0, 0, f.tx, f.tz) });
   }
 
+  // --- Weapon finds: each spot has its own story and luck bias -------------
+  const finds: WeaponFind[] = [];
+  {
+    const fr = new Rng(deriveSeed(seed, 'loot/finds'));
+    const lootSeed = (i: number): number => deriveSeed(seed, 'loot/weapon', i);
+    const ruin = ctx.ruins[0];
+    if (ruin) {
+      const a = fr.range(0, Math.PI * 2);
+      finds.push({ id: `${seed}/find/watchtower`, x: ruin.x + Math.sin(a) * 0.9, z: ruin.z + Math.cos(a) * 0.9, yaw: fr.range(0, 6.28), pose: 'lying', seed: lootSeed(0), luck: 0.4, story: 'Half-buried in the watchtower\u2019s rubble.' });
+    }
+    const way = props.find((p) => p.kind === 'waystone');
+    if (way) {
+      const c = Math.cos(way.yaw);
+      const sn = Math.sin(way.yaw);
+      finds.push({ id: `${seed}/find/waystone`, x: way.x + c * 0.9, z: way.z - sn * 0.9, yaw: way.yaw + 0.4, pose: 'lying', seed: lootSeed(1), luck: 1.1, story: 'Laid at the foot of the waystone, like an offering.' });
+    }
+    const g = castle.gate;
+    finds.push({ id: `${seed}/find/castle-gate`, x: g.x + Math.sin(g.yaw) * 9 + fr.range(-2, 2), z: g.z + Math.cos(g.yaw) * 9, yaw: fr.range(0, 6.28), pose: 'stuck', seed: lootSeed(2), luck: 2.0, story: 'Driven point-first into the earth before the shut gate.' });
+    const barn = ctx.buildings.find((b) => b.kind === 'barn');
+    if (barn) {
+      const w = localToWorld(barn.width / 2 - 1.4, barn.depth / 2 + 0.35, barn.yaw, barn.x, barn.z);
+      finds.push({ id: `${seed}/find/barn`, x: w.x, z: w.z, yaw: barn.yaw, pose: 'leaning', seed: lootSeed(3), luck: -0.6, cls: fr.chance(0.5) ? 'spear' : 'axe', story: 'Left leaning against the barn wall.' });
+    }
+    const cottage = ctx.buildings.find((b) => b.settlementId.startsWith('cottage-'));
+    if (cottage) {
+      const w = localToWorld(-cottage.width / 2 - 2.6, cottage.depth / 2 - 1, cottage.yaw, cottage.x, cottage.z);
+      props.push({ id: `${seed}/prop/chopping-block`, kind: 'chopping-block', x: w.x, z: w.z, yaw: cottage.yaw });
+      finds.push({ id: `${seed}/find/chopping-block`, x: w.x, z: w.z, yaw: cottage.yaw + 0.3, pose: 'stuck', seed: lootSeed(4), luck: -1.2, cls: 'axe', story: 'Buried in a cottager\u2019s chopping block.' });
+    }
+  }
+
   // --- Pads, clearings, sightline -----------------------------------------
   const pads: Pad[] = [];
   for (const b of ctx.buildings) {
@@ -540,6 +572,7 @@ export function generateWorldPlan(seedInput: string): WorldPlan {
     clearings,
     sightline,
     props,
+    finds,
   };
 }
 

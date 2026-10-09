@@ -7,6 +7,8 @@
 import * as THREE from 'three';
 import { MeshBuilder, col, trs } from '../assets/geo';
 import { atmosphereUniforms } from '../rendering/atmosphere';
+import { buildWeapon } from '../assets/weaponMesh';
+import type { WeaponGenome } from '../gameplay/weapons';
 import { damp } from '../core/math';
 
 const LEATHER = col('#3e2c23');
@@ -15,91 +17,7 @@ const LEATHER_LIGHT = col('#6e5241');
 const BRACER = col('#2c2622');
 const TOOLING = col('#8a7a62');
 const STEEL = col('#c9c3bc');
-const STEEL_DARK = col('#5e5f66');
-const STEEL_EDGE = col('#f4f0ea');
-const GOLD = col('#c8963e');
 const SLEEVE = col('#3c3550');
-
-function swordGeometry(b: MeshBuilder): void {
-  const I = new THREE.Matrix4();
-  // Blade: lozenge cross-section with a dark fuller, tapering to a point.
-  const len = 0.92;
-  const steps = 8;
-  const width = (t: number): number => 0.026 * (1 - t * 0.55) * (t > 0.86 ? Math.max(0, (1 - t) / 0.14) : 1);
-  const thick = (t: number): number => 0.0065 * (1 - t * 0.6) + 0.001;
-  for (let i = 0; i < steps; i++) {
-    const t0 = i / steps;
-    const t1 = (i + 1) / steps;
-    const y0 = 0.03 + t0 * len;
-    const y1 = 0.03 + t1 * len;
-    const w0 = width(t0);
-    const w1 = width(t1);
-    const k0 = thick(t0);
-    const k1 = thick(t1);
-    for (const sz of [1, -1]) {
-      // Each face: edge → spine (two bevels per side).
-      for (const sx of [1, -1]) {
-        const e0 = new THREE.Vector3(sx * w0, y0, 0);
-        const e1 = new THREE.Vector3(sx * w1, y1, 0);
-        const s0 = new THREE.Vector3(0, y0, sz * k0);
-        const s1 = new THREE.Vector3(0, y1, sz * k1);
-        const n = new THREE.Vector3(sx * 0.35, 0, sz).normalize();
-        const cE = STEEL_EDGE;
-        const cS = STEEL.clone().lerp(STEEL_DARK, 0.25);
-        const ccw = sx * sz > 0;
-        if (ccw) {
-          b.smoothTri('steel', [e0, s1, s0], [n, n, n], [[0, y0], [1, y1], [1, y0]], [cE, cS, cS]);
-          b.smoothTri('steel', [e0, e1, s1], [n, n, n], [[0, y0], [0, y1], [1, y1]], [cE, cE, cS]);
-        } else {
-          b.smoothTri('steel', [e0, s0, s1], [n, n, n], [[0, y0], [1, y0], [1, y1]], [cE, cS, cS]);
-          b.smoothTri('steel', [e0, s1, e1], [n, n, n], [[0, y0], [1, y1], [0, y1]], [cE, cS, cE]);
-        }
-      }
-      // Fuller groove along the first two thirds.
-      if (t1 < 0.7) {
-        const f = new THREE.Vector3(0, 0, sz);
-        const fz = sz * (Math.min(k0, k1) + 0.0004);
-        const fw = 0.0055;
-        const q0 = new THREE.Vector3(-fw, y0, fz);
-        const q1 = new THREE.Vector3(fw, y0, fz);
-        const q2 = new THREE.Vector3(fw, y1, fz);
-        const q3 = new THREE.Vector3(-fw, y1, fz);
-        if (sz > 0) {
-          b.smoothTri('steel', [q0, q1, q2], [f, f, f], [[0, 0], [1, 0], [1, 1]], [STEEL_DARK, STEEL_DARK, STEEL_DARK]);
-          b.smoothTri('steel', [q0, q2, q3], [f, f, f], [[0, 0], [1, 1], [0, 1]], [STEEL_DARK, STEEL_DARK, STEEL_DARK]);
-        } else {
-          b.smoothTri('steel', [q0, q2, q1], [f, f, f], [[0, 0], [1, 1], [1, 0]], [STEEL_DARK, STEEL_DARK, STEEL_DARK]);
-          b.smoothTri('steel', [q0, q3, q2], [f, f, f], [[0, 0], [0, 1], [1, 1]], [STEEL_DARK, STEEL_DARK, STEEL_DARK]);
-        }
-      }
-    }
-  }
-  // Ricasso block.
-  b.box('steel', I, 0, 0.035, 0, 0.044, 0.05, 0.014, { color: STEEL });
-  // Cross-guard: a gently up-swept bar built from short segments, rounded
-  // gilded finials and a diamond langet over the blade root.
-  const guardCol = STEEL_DARK.clone().lerp(STEEL, 0.35);
-  for (let k = -3; k <= 3; k++) {
-    const x = k * 0.026;
-    const y = 0.007 * (k / 3) * (k / 3);
-    const slope = (0.014 * k) / 9 / 0.026;
-    const th = 0.017 - Math.abs(k) * 0.0012;
-    b.box('steel', trs(x, y, 0, 0, 1, 1, 1, 0, Math.atan(slope)), 0, 0, 0, 0.03, th, 0.022 - Math.abs(k) * 0.001, { color: k === 0 ? guardCol.clone().lerp(GOLD, 0.3) : guardCol });
-  }
-  for (const s of [-1, 1]) {
-    const fin = new THREE.IcosahedronGeometry(0.013, 0);
-    b.geometry('steel', fin, trs(s * 0.096, 0.011, 0), GOLD.clone().multiplyScalar(0.8));
-    fin.dispose();
-  }
-  b.box('steel', trs(0, 0.022, 0, 0, 1, 1, 1, 0, Math.PI / 4), 0, 0, 0, 0.022, 0.022, 0.026, { color: guardCol });
-  b.box('steel', trs(0, 0.022, 0, 0, 1, 1, 1, 0, Math.PI / 4), 0, 0, 0, 0.012, 0.012, 0.028, { color: GOLD.clone().multiplyScalar(0.75) });
-  // Leather grip with wrap ridges.
-  b.cylinder('leather', I, 0, -0.17, 0, 0.016, 0.018, 0.165, 7, { color: LEATHER_DARK });
-  for (let i = 0; i < 6; i++) b.cylinder('leather', I, 0, -0.16 + i * 0.026, 0, 0.0185, 0.0185, 0.007, 7, { color: LEATHER_LIGHT }, { flat: true });
-  // Pommel: faceted wheel with a gilded cap.
-  b.cylinder('steel', trs(0, -0.19, 0, 0, 1, 1, 1, Math.PI / 2, 0), 0, -0.012, 0, 0.032, 0.032, 0.024, 8, { color: STEEL_DARK.clone().lerp(GOLD, 0.5) }, { capTop: true, capBottom: true, flat: true });
-  b.box('steel', I, 0, -0.215, 0, 0.018, 0.018, 0.018, { color: GOLD });
-}
 
 /** A rounded mass (subdivided icosahedron) for organic glove forms. */
 function blob(b: MeshBuilder, m: THREE.Matrix4, sx: number, sy: number, sz: number, color: THREE.Color, shade = 0.35): void {
@@ -144,15 +62,40 @@ function fistGeometry(b: MeshBuilder, mirror: number, open = 0): void {
   b.cylinder('leather', wrist, 0, -0.64, 0, 0.07, 0.06, 0.3, 12, { color: SLEEVE });
 }
 
+export interface ViewMaterials {
+  steel: THREE.Material;
+  leather: THREE.Material;
+  glow: THREE.Material;
+}
+
 interface Pose {
   p: THREE.Vector3;
   r: THREE.Euler;
 }
 
-const IDLE: Pose = { p: new THREE.Vector3(0.24, -0.13, -0.5), r: new THREE.Euler(-1.0, -0.05, 0.12) };
-const SPRINT: Pose = { p: new THREE.Vector3(0.28, -0.3, -0.46), r: new THREE.Euler(-1.5, 0.15, -0.25) };
-const WINDUP: Pose = { p: new THREE.Vector3(0.33, -0.06, -0.44), r: new THREE.Euler(-0.25, -0.35, -0.95) };
-const SLASH: Pose = { p: new THREE.Vector3(-0.16, -0.32, -0.5), r: new THREE.Euler(-1.65, 0.45, 1.25) };
+interface PoseSet {
+  idle: Pose;
+  sprint: Pose;
+  windup: Pose;
+  slash: Pose;
+}
+
+const P = (x: number, y: number, z: number, rx: number, ry: number, rz: number): Pose => ({ p: new THREE.Vector3(x, y, z), r: new THREE.Euler(rx, ry, rz) });
+
+/** Hand-authored poses per weapon family; long weapons sit lower and further out. */
+const POSES: Record<'blade' | 'great' | 'hafted' | 'polearm', PoseSet> = {
+  blade: { idle: P(0.24, -0.13, -0.5, -1.0, -0.05, 0.12), sprint: P(0.28, -0.3, -0.46, -1.5, 0.15, -0.25), windup: P(0.33, -0.06, -0.44, -0.25, -0.35, -0.95), slash: P(-0.16, -0.32, -0.5, -1.65, 0.45, 1.25) },
+  great: { idle: P(0.26, -0.24, -0.5, -0.85, -0.1, 0.25), sprint: P(0.3, -0.36, -0.42, -1.45, 0.2, -0.2), windup: P(0.34, -0.1, -0.42, -0.1, -0.4, -1.05), slash: P(-0.2, -0.36, -0.52, -1.7, 0.5, 1.35) },
+  hafted: { idle: P(0.24, -0.15, -0.5, -0.95, -0.05, 0.15), sprint: P(0.28, -0.3, -0.44, -1.45, 0.15, -0.25), windup: P(0.32, -0.06, -0.42, -0.15, -0.35, -0.95), slash: P(-0.18, -0.32, -0.5, -1.6, 0.45, 1.2) },
+  polearm: { idle: P(0.2, -0.2, -0.42, -1.25, 0.1, 0.22), sprint: P(0.26, -0.32, -0.4, -1.15, 0.3, -0.35), windup: P(0.22, -0.16, -0.26, -1.35, 0.06, 0.18), slash: P(0.08, -0.17, -0.78, -1.45, 0.02, 0.12) },
+};
+
+function poseSetFor(w: WeaponGenome | null): PoseSet {
+  if (!w) return POSES.blade;
+  if (w.family === 'polearm') return POSES.polearm;
+  if (w.family === 'blade') return w.hands === 2 ? POSES.great : POSES.blade;
+  return POSES.hafted;
+}
 
 export class ViewModel {
   readonly scene = new THREE.Scene();
@@ -168,12 +111,19 @@ export class ViewModel {
   private dip = 0;
   private sprintBlend = 0;
   private attackT = -1;
-  private readonly pose: Pose = { p: IDLE.p.clone(), r: IDLE.r.clone() };
+  private readonly pose: Pose = { p: POSES.blade.idle.p.clone(), r: POSES.blade.idle.r.clone() };
   /** Called at the moment of the slash (for audio/camera). */
   onSwing: (() => void) | null = null;
   attacking = false;
 
-  constructor(materials: { steel: THREE.Material; leather: THREE.Material }) {
+  private readonly weaponGroup = new THREE.Group();
+  private readonly materials: ViewMaterials;
+  private poses: PoseSet = POSES.blade;
+  /** Swing tempo multiplier from the weapon's speed stat. */
+  private tempo = 1;
+  weapon: WeaponGenome | null = null;
+
+  constructor(materials: ViewMaterials) {
     this.camera = new THREE.PerspectiveCamera(52, 16 / 9, 0.01, 10);
     this.scene.add(this.root);
     this.root.add(this.swordArm, this.offArm);
@@ -181,14 +131,15 @@ export class ViewModel {
     this.sun.intensity = 2.4;
     this.hemi.intensity = 1.3;
 
+    this.materials = materials;
     const sb = new MeshBuilder();
-    swordGeometry(sb);
     fistGeometry(sb, 1);
     for (const [key, geo] of sb.build()) {
       const mesh = new THREE.Mesh(geo, key === 'steel' ? materials.steel : materials.leather);
       mesh.frustumCulled = false;
       this.swordArm.add(mesh);
     }
+    this.swordArm.add(this.weaponGroup);
     const ob = new MeshBuilder();
     fistGeometry(ob, -1, 0.35);
     for (const [, geo] of ob.build()) {
@@ -200,11 +151,35 @@ export class ViewModel {
     this.offArm.rotation.set(-1.0, -0.2, 0.45);
   }
 
-  static createMaterials(): { steel: THREE.Material; leather: THREE.Material } {
+  /** Equip a generated weapon: rebuild its mesh and adopt its pose set and tempo. */
+  setWeapon(w: WeaponGenome): void {
+    for (const c of [...this.weaponGroup.children]) {
+      const m = c as THREE.Mesh;
+      m.geometry.dispose();
+      this.weaponGroup.remove(m);
+    }
+    const b = new MeshBuilder();
+    buildWeapon(b, w);
+    for (const [key, geo] of b.build()) {
+      const mat = key === 'steel' ? this.materials.steel : key === 'glow' ? this.materials.glow : this.materials.leather;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.frustumCulled = false;
+      this.weaponGroup.add(mesh);
+    }
+    // Long hafted weapons are gripped partway up the haft so the head stays in view.
+    const len = w.family === 'blade' ? 0 : w.shape.gripLength;
+    this.weaponGroup.position.y = w.family === 'polearm' ? -len * 0.42 : w.hands === 2 ? -len * 0.3 : -len * 0.12;
+    this.weapon = w;
+    this.poses = poseSetFor(w);
+    this.tempo = THREE.MathUtils.clamp(w.stats.speed / 1.5, 0.55, 1.6);
+  }
+
+  static createMaterials(): ViewMaterials {
     // Warm emissive lift counters the violet sky fill so the steel reads silver, not blue.
     const steel = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 60, specular: new THREE.Color('#e8e2d8'), emissive: new THREE.Color('#2a2218'), side: THREE.DoubleSide });
     const leather = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-    return { steel, leather };
+    const glow = new THREE.MeshBasicMaterial({ vertexColors: true });
+    return { steel, leather, glow };
   }
 
   setAspect(aspect: number): void {
@@ -244,30 +219,25 @@ export class ViewModel {
     this.sprintBlend += ((s.sprinting && s.speed > 5 ? 1 : 0) - this.sprintBlend) * damp(7, dt);
 
     // Base pose: idle blended toward sprint carry.
-    const base: Pose = {
-      p: IDLE.p.clone().lerp(SPRINT.p, this.sprintBlend),
-      r: new THREE.Euler(
-        THREE.MathUtils.lerp(IDLE.r.x, SPRINT.r.x, this.sprintBlend),
-        THREE.MathUtils.lerp(IDLE.r.y, SPRINT.r.y, this.sprintBlend),
-        THREE.MathUtils.lerp(IDLE.r.z, SPRINT.r.z, this.sprintBlend),
-      ),
-    };
+    const ps = this.poses;
+    const base = lerpPose(ps.idle, ps.sprint, this.sprintBlend);
 
     // Attack timeline: anticipation (0–0.16) → slash (0.16–0.32) → recovery (0.32–0.7).
     let target = base;
     if (this.attackT >= 0) {
       const t = this.attackT;
       const ease = (x: number): number => x * x * (3 - 2 * x);
-      if (t < 0.16) target = lerpPose(base, WINDUP, ease(t / 0.16));
+      const sdt = dt * this.tempo;
+      if (t < 0.16) target = lerpPose(base, ps.windup, ease(t / 0.16));
       else if (t < 0.32) {
-        if (t - dt < 0.16) this.onSwing?.();
-        target = lerpPose(WINDUP, SLASH, Math.pow((t - 0.16) / 0.16, 0.7));
-      } else if (t < 0.7) target = lerpPose(SLASH, base, ease((t - 0.32) / 0.38));
+        if (t - sdt < 0.16) this.onSwing?.();
+        target = lerpPose(ps.windup, ps.slash, Math.pow((t - 0.16) / 0.16, 0.7));
+      } else if (t < 0.7) target = lerpPose(ps.slash, base, ease((t - 0.32) / 0.38));
       else {
         this.attackT = -1;
         this.attacking = false;
       }
-      if (this.attackT >= 0) this.attackT += dt;
+      if (this.attackT >= 0) this.attackT += sdt;
     }
     const follow = this.attackT >= 0 ? 1 : damp(12, dt);
     this.pose.p.lerp(target.p, follow);

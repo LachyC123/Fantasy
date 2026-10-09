@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import type { TerrainColorizer } from './terrainColor';
+import type { GenPool } from './genPool';
 
 export interface TerrainStreamerOptions {
   segments: number;
@@ -28,7 +29,32 @@ interface NodeKey {
 
 const DEFAULTS: TerrainStreamerOptions = { segments: 32, minSize: 64, rootSize: 4096, viewRange: 7200, splitFactor: 1.35 };
 
+/** Plain typed-array mesh data for one terrain node (transferable from a worker). */
+export interface TerrainNodeData {
+  pos: Float32Array;
+  nrm: Float32Array;
+  col: Float32Array;
+  uv: Float32Array;
+  idx: Uint32Array;
+}
+
+export function terrainDataToGeometry(d: TerrainNodeData): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(d.nrm, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(d.col, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(d.uv, 2));
+  g.setIndex(new THREE.BufferAttribute(d.idx, 1));
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  return g;
+}
+
 export function buildTerrainGeometry(terrain: Terrain, colorizer: TerrainColorizer, x0: number, z0: number, size: number, segments: number): THREE.BufferGeometry {
+  return terrainDataToGeometry(buildTerrainData(terrain, colorizer, x0, z0, size, segments));
+}
+
+export function buildTerrainData(terrain: Terrain, colorizer: TerrainColorizer, x0: number, z0: number, size: number, segments: number): TerrainNodeData {
   const n = segments;
   const step = size / n;
   const stride = n + 3; // one-sample border on each side for normals
@@ -120,30 +146,22 @@ export function buildTerrainGeometry(terrain: Terrain, colorizer: TerrainColoriz
     idx.push(top0, bot0, top1, top1, bot0, bot1);
     idx.push(top0, top1, bot0, top1, bot1, bot0);
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(colr, 3));
-  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.computeBoundingBox();
-  g.computeBoundingSphere();
-  return g;
+  return { pos, nrm, col: colr, uv, idx: new Uint32Array(idx) };
 }
 
 export class TerrainStreamer {
   readonly group = new THREE.Group();
   private readonly opts: TerrainStreamerOptions;
   private readonly built = new Map<string, THREE.Mesh>();
+  private readonly requested = new Set<string>();
   private displayed = new Set<string>();
   private target: NodeKey[] = [];
-  private queue: NodeKey[] = [];
+  private targetKeys = new Set<string>();
   private lastCam = new THREE.Vector3(Infinity, 0, Infinity);
   stats = { nodes: 0, queued: 0, lastBuildMs: 0, maxBuildMs: 0 };
 
   constructor(
-    private readonly terrain: Terrain,
-    private readonly colorizer: TerrainColorizer,
+    private readonly pool: GenPool,
     private readonly material: THREE.Material,
     opts: Partial<TerrainStreamerOptions> = {},
   ) {
@@ -177,77 +195,76 @@ export class TerrainStreamer {
     return out;
   }
 
-  private buildNode(n: NodeKey): void {
-    const t0 = performance.now();
-    const geo = buildTerrainGeometry(this.terrain, this.colorizer, n.x0, n.z0, n.size, this.opts.segments);
-    const mesh = new THREE.Mesh(geo, this.material);
-    mesh.receiveShadow = true;
-    mesh.castShadow = false;
-    mesh.matrixAutoUpdate = false;
-    mesh.name = `terrain ${n.key}`;
-    this.built.set(n.key, mesh);
-    const dt = performance.now() - t0;
-    this.stats.lastBuildMs = dt;
-    this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, dt);
+  private priority(cam: THREE.Vector3, size: number, x0: number, z0: number): number {
+    // Small (near) nodes first, then by distance.
+    return Math.log2(size) * 100000 + Math.hypot(x0 + size / 2 - cam.x, z0 + size / 2 - cam.z);
   }
 
-  /** Re-plan the desired leaf set when the camera has moved enough. */
-  private replan(cam: THREE.Vector3, force: boolean): void {
-    if (!force && Math.hypot(cam.x - this.lastCam.x, cam.z - this.lastCam.z) < 12) return;
+  /** Re-plan the desired leaf set when the camera has moved enough; request missing nodes. */
+  private replan(cam: THREE.Vector3, force: boolean): Promise<unknown>[] {
+    if (!force && Math.hypot(cam.x - this.lastCam.x, cam.z - this.lastCam.z) < 12) return [];
     this.lastCam.copy(cam);
     this.target = this.leaves(cam);
-    // Priority: nearest first, then those in front of the camera.
-    this.queue = this.target
-      .filter((n) => !this.built.has(n.key))
-      .sort((a, b) => a.size - b.size || dist(cam, a) - dist(cam, b));
-  }
-
-  /** Build everything required right now (loading screen). */
-  buildAll(cam: THREE.Vector3, onProgress?: (done: number, total: number) => void): void {
-    this.replan(cam, true);
-    const total = this.queue.length;
-    let done = 0;
-    for (const n of this.queue) {
-      this.buildNode(n);
-      onProgress?.(++done, total);
-    }
-    this.queue = [];
-    this.swap();
-  }
-
-  /** Incremental async build used by the loading screen without freezing. */
-  async buildAllAsync(cam: THREE.Vector3, onProgress: (done: number, total: number) => void): Promise<void> {
-    this.replan(cam, true);
-    const total = this.queue.length;
-    let done = 0;
-    let t0 = performance.now();
-    for (const n of this.queue) {
-      this.buildNode(n);
-      done++;
-      if (performance.now() - t0 > 30) {
-        onProgress(done, total);
-        await new Promise((r) => setTimeout(r, 0));
-        t0 = performance.now();
+    this.targetKeys = new Set(this.target.map((n) => n.key));
+    // Drop queued work that is no longer wanted; re-rank the rest.
+    this.pool.reprioritise((job) => {
+      if (job.kind !== 'terrain') return undefined;
+      const key = `${job.size}:${job.x0}:${job.z0}`;
+      if (!this.targetKeys.has(key)) {
+        this.requested.delete(key);
+        return null;
       }
+      return this.priority(cam, job.size, job.x0, job.z0);
+    });
+    const promises: Promise<unknown>[] = [];
+    for (const n of this.target) {
+      if (this.built.has(n.key) || this.requested.has(n.key)) continue;
+      this.requested.add(n.key);
+      const t0 = performance.now();
+      const req = this.pool.request<TerrainNodeData>({ kind: 'terrain', x0: n.x0, z0: n.z0, size: n.size, segments: this.opts.segments }, this.priority(cam, n.size, n.x0, n.z0));
+      promises.push(
+        req.promise.then((data) => {
+          this.requested.delete(n.key);
+          const t1 = performance.now();
+          const mesh = new THREE.Mesh(terrainDataToGeometry(data), this.material);
+          mesh.receiveShadow = true;
+          mesh.matrixAutoUpdate = false;
+          mesh.name = `terrain ${n.key}`;
+          this.built.set(n.key, mesh);
+          // Main-thread cost is only the upload wrapper; total latency is tracked separately.
+          this.stats.lastBuildMs = performance.now() - t1;
+          this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, this.stats.lastBuildMs);
+          void t0;
+        }),
+      );
     }
-    onProgress(total, total);
-    this.queue = [];
+    return promises;
+  }
+
+  /** Build everything required right now (loading screen), reporting progress. */
+  async buildAllAsync(cam: THREE.Vector3, onProgress: (done: number, total: number) => void): Promise<void> {
+    const promises = this.replan(cam, true);
+    const total = promises.length;
+    let done = 0;
+    await Promise.all(
+      promises.map((p) =>
+        p.then(() => {
+          done++;
+          if (done % 4 === 0 || done === total) onProgress(done, total);
+        }),
+      ),
+    );
     this.swap();
   }
 
-  update(cam: THREE.Vector3, budgetMs: number): void {
+  update(cam: THREE.Vector3): void {
     this.replan(cam, false);
-    const t0 = performance.now();
-    while (this.queue.length && performance.now() - t0 < budgetMs) {
-      const n = this.queue.shift()!;
-      if (!this.built.has(n.key)) this.buildNode(n);
-    }
-    if (this.queue.length === 0) this.swap();
-    this.stats.queued = this.queue.length;
+    if (this.target.every((n) => this.built.has(n.key))) this.swap();
+    this.stats.queued = this.requested.size;
   }
 
   private swap(): void {
-    const next = new Set(this.target.map((n) => n.key));
+    const next = this.targetKeys;
     if (setsEqual(next, this.displayed)) return;
     for (const key of this.displayed) {
       if (next.has(key)) continue;
@@ -262,7 +279,7 @@ export class TerrainStreamer {
         this.group.add(m);
       }
     }
-    this.displayed = next;
+    this.displayed = new Set(next);
     // Evict cached nodes that are far from use to bound memory.
     if (this.built.size > next.size * 2 + 64) {
       for (const [key, m] of this.built) {
@@ -279,10 +296,6 @@ export class TerrainStreamer {
     this.built.clear();
     this.group.clear();
   }
-}
-
-function dist(cam: THREE.Vector3, n: NodeKey): number {
-  return Math.hypot(n.x0 + n.size / 2 - cam.x, n.z0 + n.size / 2 - cam.z);
 }
 
 function setsEqual(a: Set<string>, b: Set<string>): boolean {

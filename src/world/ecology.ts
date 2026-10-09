@@ -104,7 +104,11 @@ export class Ecology {
 
   /** Forest density after clearings, sightline and settlement exclusions. */
   forestDensity(x: number, z: number): number {
-    const h = this.terrain.height(x, z);
+    return this.forestDensityAt(x, z, this.terrain.height(x, z));
+  }
+
+  /** As forestDensity, reusing a height the caller already sampled. */
+  forestDensityAt(x: number, z: number, h: number): number {
     let f = this.forestBase(x, z, h);
     if (f <= 0) return 0;
     for (const c of this.plan.clearings) {
