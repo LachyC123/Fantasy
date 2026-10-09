@@ -15,6 +15,7 @@ const LOOK_SCALE = 2.5;
 
 export interface TouchHandlers {
   pause: () => void;
+  map: () => void;
 }
 
 export class TouchControls {
@@ -39,6 +40,7 @@ export class TouchControls {
       <div class="touch-stick"><div class="touch-knob"></div></div>
       <button class="tb tb-pause" aria-label="Pause">❚❚</button>
       <button class="tb tb-card" aria-label="Inspect your weapon">⚔ Weapon</button>
+      <button class="tb tb-map" aria-label="Open the Atlas">Map</button>
       <button class="tb tb-use" aria-label="Use" hidden>Use</button>
       <button class="tb tb-jump" aria-label="Jump">Jump</button>
       <button class="tb tb-swing" aria-label="Swing">Swing</button>`;
@@ -72,6 +74,7 @@ export class TouchControls {
     tap('.tb-use', () => this.input.tapKey('KeyE'));
     tap('.tb-card', () => this.input.tapKey('KeyI'));
     tap('.tb-pause', () => handlers.pause());
+    tap('.tb-map', () => handlers.map());
     // The on-screen prompt itself is also a Use button.
     document.querySelector<HTMLElement>('#hud .prompt')?.addEventListener('pointerdown', (e) => {
       e.preventDefault();

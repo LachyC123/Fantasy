@@ -82,7 +82,99 @@ function windowUnit(b: MeshBuilder, m: THREE.Matrix4, x: number, y: number, z: n
   }
 }
 
+/**
+ * Village church: a stone nave with buttresses and lancet windows, a south
+ * porch facing the street (+Z), and a bell tower with a slate spire at the
+ * west (−X) end. The footprint (width × depth) includes the tower.
+ */
+function buildChurch(b: MeshBuilder, plan: BuildingPlan): BuildingResult {
+  const rng = new Rng(plan.seed);
+  const m = trs(plan.x, plan.padHeight, plan.z, plan.yaw);
+  const W = plan.width;
+  const D = plan.depth;
+  const stone = (v = 0.06): THREE.Color => col('#ffffff').multiplyScalar(1 - v + rng.next() * v * 2);
+  const towerS = THREE.MathUtils.clamp(D * 0.62, 4.2, 5.6);
+  const towerX = -W / 2 + towerS / 2;
+  const naveLen = W - towerS + 0.3;
+  const naveCx = W / 2 - naveLen / 2;
+  const naveH = rng.range(5.6, 6.6);
+  const towerH = rng.range(13, 17);
+  const spireH = rng.range(7, 11);
+
+  b.box('stone', m, 0, -0.75, 0, W + 0.4, 1.5, D + 0.4, { color: col('#d0c8bc'), aoBottom: 0.4 });
+  b.box('stone', m, naveCx, naveH / 2, 0, naveLen, naveH, D, { color: stone(), aoBottom: 0.35, aoHeight: 1.4 }, 0b001111);
+  // Buttresses and lancet windows along both long walls.
+  const bays = Math.max(3, Math.round(naveLen / 3.4));
+  const doorBay = Math.floor(bays * 0.35);
+  for (const sz of [-1, 1]) {
+    for (let i = 0; i <= bays; i++) {
+      const x = naveCx - naveLen / 2 + (naveLen * i) / bays;
+      if (i > 0) b.box('stone', m, x, naveH * 0.42, sz * (D / 2 + 0.25), 0.55, naveH * 0.84, 0.5, { color: stone(0.04), aoBottom: 0.35 });
+      if (i === bays) continue;
+      const wx = x + naveLen / bays / 2;
+      if (sz > 0 && i === doorBay) continue;
+      b.box('glowWindow', m, wx, 3.0, sz * (D / 2 + 0.03), 0.55, 2.3, 0.08, { color: col('#ffffff') });
+      b.box('stone', m, wx, 4.3, sz * (D / 2 + 0.06), 0.8, 0.3, 0.14, { color: stone(0.03) });
+    }
+  }
+  // South porch with the door.
+  const doorX = naveCx - naveLen / 2 + (naveLen * (doorBay + 0.5)) / bays;
+  b.box('stone', m, doorX, 1.6, D / 2 + 0.9, 2.6, 3.2, 1.8, { color: stone(), aoBottom: 0.35 }, 0b101111);
+  b.box('slate', m.clone().multiply(trs(doorX, 3.55, D / 2 + 0.9, 0, 1, 1, 1, 0, 0)), 0, 0, 0, 3.0, 0.16, 2.2, { color: col('#ffffff') });
+  b.box('planks', m, doorX, 1.15, D / 2 + 1.82, 1.2, 2.3, 0.1, { color: col('#8a5a3a') });
+  b.box('stone', m, doorX, 2.45, D / 2 + 1.84, 1.5, 0.3, 0.12, { color: stone(0.03) });
+  // Steep slate roof over the nave.
+  const pitch = plan.roofPitch;
+  const over = 0.35;
+  const halfSpan = D / 2 + over;
+  const rise = (D / 2) * pitch;
+  const ang = Math.atan2(rise, D / 2);
+  const slopeLen = Math.hypot(halfSpan, rise + over * pitch);
+  for (const sz of [-1, 1]) {
+    const cy = naveH - over * pitch + (rise + over * pitch) / 2 + 0.1;
+    b.box('slate', m.clone().multiply(trs(naveCx, cy, sz * (halfSpan / 2), 0, 1, 1, 1, sz * ang, 0)), 0, 0, 0, naveLen + 0.5, 0.2, slopeLen, { color: col('#ffffff') });
+  }
+  b.box('slate', m, naveCx, naveH + rise + 0.15, 0, naveLen + 0.6, 0.25, 0.4, { color: col('#d0d0d0') });
+  // East gable with a round window.
+  const ex = W / 2;
+  const g0 = new THREE.Vector3(ex, naveH, -D / 2).applyMatrix4(m);
+  const g1 = new THREE.Vector3(ex, naveH, D / 2).applyMatrix4(m);
+  const g2 = new THREE.Vector3(ex, naveH + rise, 0).applyMatrix4(m);
+  b.tri('stone', g0, g2, g1, [-(D / 2), naveH], [0, naveH + rise], [D / 2, naveH], stone());
+  b.cylinder('glowWindow', m.clone().multiply(trs(ex + 0.04, naveH + rise * 0.35, 0, 0, 1, 1, 1, 0, Math.PI / 2)), 0, 0, 0, 0.75, 0.75, 0.06, 10, { color: col('#ffffff') }, { capTop: true, flat: true });
+  // Bell tower, belfry openings and spire.
+  b.box('stone', m, towerX, towerH / 2, 0, towerS, towerH, towerS, { color: stone(), aoBottom: 0.35, aoHeight: 2 });
+  for (const [fx, fz] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const) {
+    b.box('plain', m, towerX + fx * (towerS / 2 + 0.02), towerH - 2.2, fz * (towerS / 2 + 0.02), fx ? 0.06 : 0.9, 1.8, fz ? 0.06 : 0.9, { color: col('#1e1a20') });
+  }
+  b.box('stone', m, towerX, towerH + 0.2, 0, towerS + 0.4, 0.4, towerS + 0.4, { color: stone(0.03) });
+  const spire = m.clone().multiply(trs(towerX, towerH + 0.4, 0, Math.PI / 4));
+  b.cylinder('slate', spire, 0, 0, 0, towerS * 0.68, 0.06, spireH, 4, { color: col('#ffffff') }, { flat: true });
+  b.box('metal', m, towerX, towerH + 0.4 + spireH + 0.5, 0, 0.08, 1.0, 0.08, { color: col('#c8a050') });
+  b.box('metal', m, towerX, towerH + 0.4 + spireH + 0.65, 0, 0.5, 0.08, 0.08, { color: col('#c8a050') });
+
+  const towerC = new THREE.Vector3(towerX, 0, 0).applyMatrix4(m);
+  const naveC = new THREE.Vector3(naveCx, 0, 0).applyMatrix4(m);
+  const porchC = new THREE.Vector3(doorX, 0, D / 2 + 0.9).applyMatrix4(m);
+  return {
+    colliders: [
+      { x: naveC.x, z: naveC.z, yaw: plan.yaw, hw: naveLen / 2 + 0.1, hd: D / 2 + 0.55, y0: plan.padHeight - 1.5, y1: plan.padHeight + naveH + rise },
+      { x: towerC.x, z: towerC.z, yaw: plan.yaw, hw: towerS / 2 + 0.1, hd: towerS / 2 + 0.1, y0: plan.padHeight - 1.5, y1: plan.padHeight + towerH + spireH },
+      { x: porchC.x, z: porchC.z, yaw: plan.yaw, hw: 1.35, hd: 0.5, y0: plan.padHeight - 1, y1: plan.padHeight + 3.6 },
+    ],
+    chimneyTop: null,
+    door: new THREE.Vector3(doorX, 0, D / 2 + 2.4).applyMatrix4(m),
+    height: towerH + spireH,
+  };
+}
+
 export function buildBuilding(b: MeshBuilder, plan: BuildingPlan): BuildingResult {
+  if (plan.kind === 'church') return buildChurch(b, plan);
   const rng = new Rng(plan.seed);
   const m = trs(plan.x, plan.padHeight, plan.z, plan.yaw);
   const W = plan.width;
@@ -225,6 +317,15 @@ export function buildBuilding(b: MeshBuilder, plan: BuildingPlan): BuildingResul
     const [s0, s1] = frontSpans[0]!;
     b.box('planks', m, (s0 + s1) / 2, 0.92, fz + 0.2, s1 - s0 + 0.2, 0.22, 0.3, { color: col('#a08060') });
     for (let k = 0; k < 4; k++) b.box('plain', m, s0 + ((s1 - s0) * (k + 0.5)) / 4, 1.1, fz + 0.22, 0.18, 0.16, 0.18, { color: rng.pick([col('#d84a4a'), col('#f2d24a'), col('#f4f0e6'), col('#9a6ad0')]) });
+  }
+
+  // The inn: a painted sign on a bracket above the door, and a lantern.
+  if (plan.kind === 'inn') {
+    const sx = doorX + (doorX > 0 ? -1.1 : 1.1);
+    b.box('timber', m, sx, 3.35, fz + 0.65, 0.12, 0.12, 1.3, { color: col('#ffffff') });
+    b.box('planks', m, sx, 2.85, fz + 1.15, 0.06, 0.75, 1.0, { color: rng.pick([col('#b04a3a'), col('#3a5a8a'), col('#4a7a4a'), col('#c89a3a')]) });
+    b.box('plain', m, sx + 0.04, 2.85, fz + 1.15, 0.02, 0.4, 0.55, { color: col('#f0e0b0') });
+    b.box('glowWindow', m, doorX + (doorX > 0 ? 0.95 : -0.95), 2.2, fz + 0.22, 0.24, 0.32, 0.24, { color: col('#ffffff') });
   }
 
   const colliders: BoxCollider[] = [

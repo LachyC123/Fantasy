@@ -16,6 +16,8 @@ export interface BoxShape {
   y1: number;
   /** Optional tag for debugging (e.g. building id). */
   tag?: string;
+  /** Owning group (a streamed region); removed together. */
+  group?: string;
 }
 
 export interface CircleShape {
@@ -25,6 +27,7 @@ export interface CircleShape {
   y0: number;
   y1: number;
   tag?: string;
+  group?: string;
 }
 
 const CELL = 16;
@@ -37,7 +40,30 @@ export class CollisionWorld {
   private dynamicCircles: CircleShape[] = [];
   private dynamicGrid = new Map<number, number[]>();
 
+  /** Group stamped on shapes added from now on (streamed regions add and remove theirs together). */
+  group: string | undefined = undefined;
+
   constructor(readonly heightAt: (x: number, z: number) => number) {}
+
+  /** Remove every static shape of a group and rebuild the grid. */
+  removeGroup(group: string): void {
+    const keepB = this.boxes.filter((b) => b.group !== group);
+    const keepC = this.circles.filter((c) => c.group !== group);
+    if (keepB.length === this.boxes.length && keepC.length === this.circles.length) return;
+    this.boxes.length = 0;
+    this.circles.length = 0;
+    this.grid.clear();
+    const g = this.group;
+    for (const b of keepB) {
+      this.group = b.group;
+      this.addBox(b);
+    }
+    for (const c of keepC) {
+      this.group = c.group;
+      this.addCircle(c);
+    }
+    this.group = g;
+  }
 
   private cell(cx: number, cz: number): { b: number[]; c: number[] } {
     const k = key(cx, cz);
@@ -48,6 +74,7 @@ export class CollisionWorld {
 
   addBox(b: BoxShape): void {
     const i = this.boxes.length;
+    if (this.group !== undefined && b.group === undefined) b = { ...b, group: this.group };
     this.boxes.push(b);
     const r = Math.hypot(b.hw, b.hd);
     for (let cx = Math.floor((b.x - r) / CELL); cx <= Math.floor((b.x + r) / CELL); cx++)
@@ -56,6 +83,7 @@ export class CollisionWorld {
 
   addCircle(c: CircleShape): void {
     const i = this.circles.length;
+    if (this.group !== undefined && c.group === undefined) c = { ...c, group: this.group };
     this.circles.push(c);
     for (let cx = Math.floor((c.x - c.r) / CELL); cx <= Math.floor((c.x + c.r) / CELL); cx++)
       for (let cz = Math.floor((c.z - c.r) / CELL); cz <= Math.floor((c.z + c.r) / CELL); cz++) this.cell(cx, cz).c.push(i);

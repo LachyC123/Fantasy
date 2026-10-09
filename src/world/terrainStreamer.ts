@@ -8,7 +8,8 @@
  * so the ground never shows holes while streaming.
  */
 import * as THREE from 'three';
-import type { Terrain } from './terrain';
+import type { TerrainLike } from './terrain';
+import { VALE_BOUNDS } from './regions';
 import type { TerrainColorizer } from './terrainColor';
 import type { GenPool } from './genPool';
 
@@ -50,18 +51,30 @@ export function terrainDataToGeometry(d: TerrainNodeData): THREE.BufferGeometry 
   return g;
 }
 
-export function buildTerrainGeometry(terrain: Terrain, colorizer: TerrainColorizer, x0: number, z0: number, size: number, segments: number): THREE.BufferGeometry {
+export function buildTerrainGeometry(terrain: TerrainLike, colorizer: TerrainColorizer, x0: number, z0: number, size: number, segments: number): THREE.BufferGeometry {
   return terrainDataToGeometry(buildTerrainData(terrain, colorizer, x0, z0, size, segments));
 }
 
-export function buildTerrainData(terrain: Terrain, colorizer: TerrainColorizer, x0: number, z0: number, size: number, segments: number): TerrainNodeData {
+/** Terrain with a cheap distant form (macro + castle summits, no planning needed). */
+interface FarTerrain extends TerrainLike {
+  heightFar?(x: number, z: number): number;
+}
+
+/** Nodes this size or smaller (or wholly inside the vale) use the fully planned surface. */
+const FULL_DETAIL = 512;
+
+export function buildTerrainData(terrain: FarTerrain, colorizer: TerrainColorizer, x0: number, z0: number, size: number, segments: number): TerrainNodeData {
   const n = segments;
   const step = size / n;
   const stride = n + 3; // one-sample border on each side for normals
   const hs = new Float32Array(stride * stride);
+  const V = VALE_BOUNDS;
+  const inVale = x0 >= V.x0 && z0 >= V.z0 && x0 + size <= V.x1 && z0 + size <= V.z1;
+  const full = size <= FULL_DETAIL || inVale || !terrain.heightFar;
+  const sample = full ? (x: number, z: number) => terrain.height(x, z) : (x: number, z: number) => terrain.heightFar!(x, z);
   for (let j = 0; j < stride; j++) {
     for (let i = 0; i < stride; i++) {
-      hs[j * stride + i] = terrain.height(x0 + (i - 1) * step, z0 + (j - 1) * step);
+      hs[j * stride + i] = sample(x0 + (i - 1) * step, z0 + (j - 1) * step);
     }
   }
   const vCount = (n + 1) * (n + 1);
@@ -95,7 +108,7 @@ export function buildTerrainData(terrain: Terrain, colorizer: TerrainColorizer, 
       nrm[v * 3] = nx;
       nrm[v * 3 + 1] = ny;
       nrm[v * 3 + 2] = nz;
-      colorizer.color(x, z, h, ny, detailed, c);
+      colorizer.color(x, z, h, ny, detailed, c, full);
       colr[v * 3] = c.r;
       colr[v * 3 + 1] = c.g;
       colr[v * 3 + 2] = c.b;

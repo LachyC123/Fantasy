@@ -294,7 +294,7 @@ export class VegetationStreamer {
       const wanted = new Map(jobs.map((j) => [`${j.need}:${j.cx}:${j.cz}`, j.pr]));
       // Drop queued chunk work that is no longer needed; re-rank the rest.
       this.pool.reprioritise((job) => {
-        if (job.kind === 'terrain') return undefined;
+        if (job.kind === 'terrain' || job.kind === 'region') return undefined;
         const key = `${job.kind}:${job.cx}:${job.cz}`;
         const pr = wanted.get(key);
         if (pr === undefined) {

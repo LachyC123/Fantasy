@@ -4,8 +4,8 @@
  * the automated test-suite across many seeds.
  */
 import type { CollisionWorld } from '../player/collision';
-import type { Terrain } from './terrain';
-import type { WorldPlan } from './types';
+import type { TerrainLike } from './terrain';
+import type { WorldContent, WorldPlan } from './types';
 import { obbCorners, obbOverlap, obbSamples } from './geometry2d';
 import { maxRoadGrade } from './roads';
 import { distSqToSegment } from '../core/math';
@@ -17,7 +17,8 @@ export interface ValidationReport {
   issues: string[];
 }
 
-export function validateWorld(plan: WorldPlan, terrain: Terrain, collision?: CollisionWorld): ValidationReport {
+/** Checks shared by every area: buildings, roads, fields, fences, finds, castles. */
+export function validateContent(plan: WorldContent, terrain: TerrainLike, collision?: CollisionWorld, knownIds: string[] = []): ValidationReport {
   const issues: string[] = [];
   let checks = 0;
   const check = (cond: boolean, msg: string): void => {
@@ -59,12 +60,14 @@ export function validateWorld(plan: WorldPlan, terrain: Terrain, collision?: Col
 
   // Roads: continuous, walkable, and every end leads to a real place.
   const siteIds = new Set<string>([
-    'ancient-tree',
-    'watchtower',
-    plan.castle.id,
+    ...knownIds,
+    ...plan.castles.map((c) => c.id),
     ...plan.settlements.map((s) => s.id),
+    ...plan.sites.map((s) => s.id),
     ...plan.roads.map((r) => r.id),
+    ...plan.gates.map((g) => g.id),
   ]);
+  const b = plan.bounds;
   for (const r of plan.roads) {
     check(siteIds.has(r.from) && siteIds.has(r.to), `${r.id}: leads to an unknown place (${r.from} → ${r.to})`);
     let gap = 0;
@@ -73,34 +76,33 @@ export function validateWorld(plan: WorldPlan, terrain: Terrain, collision?: Col
     const limit = r.kind === 'trade-road' ? 0.205 : 0.305;
     const g = maxRoadGrade(r);
     check(g <= limit, `${r.id}: grade ${g.toFixed(3)} exceeds ${limit}`);
+    // Roads stay inside their area (a gate crossing sits exactly on the border).
+    let outside = 0;
+    for (const p of r.points) outside = Math.max(outside, b.x0 - p.x, p.x - b.x1, b.z0 - p.z, p.z - b.z1);
+    check(outside < 0.5, `${r.id}: leaves its area by ${outside.toFixed(1)} m`);
   }
-  const main = plan.roads.find((r) => r.kind === 'trade-road');
-  if (main) {
-    const end = main.points[main.points.length - 1]!;
-    check(Math.hypot(end.x - plan.castle.gate.x, end.z - plan.castle.gate.z) < 3, 'Vale Road does not reach the castle gate');
-  }
-  // Side roads must actually join another road at their start.
+  // Roads that end (or start) on another road must actually meet it, at the same height.
+  const byId = new Map(plan.roads.map((r) => [r.id, r] as const));
   for (const r of plan.roads) {
-    if (r.kind !== 'farm-track') continue;
-    const s = r.points[0]!;
-    const joined = plan.roads.some((o) => o !== r && o.points.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < 3));
-    check(joined, `${r.id}: does not connect to another road`);
-  }
-  const foot = plan.roads.find((r) => r.kind === 'footpath');
-  if (foot && main) {
-    const e = foot.points[foot.points.length - 1]!;
-    const j = main.points[0]!;
-    check(Math.hypot(e.x - j.x, e.z - j.z) < 3, 'Footpath does not meet the Vale Road');
-    const s0 = foot.points[0]!;
-    check(Math.hypot(s0.x - plan.spawn.x, s0.z - plan.spawn.z) < 8, 'Footpath does not start at the spawn clearing');
-  }
-
-  // Spawn: on walkable ground, unobstructed.
-  const sp = plan.spawn;
-  check(terrain.slope(sp.x, sp.z) < PLAYER.maxSlope * 0.6, `spawn slope ${terrain.slope(sp.x, sp.z).toFixed(2)} too steep`);
-  if (collision) {
-    const h = terrain.height(sp.x, sp.z);
-    check(!collision.blocked(sp.x, sp.z, PLAYER.radius, h, h + PLAYER.height, PLAYER.step), 'spawn point is inside a collider');
+    const startOn = byId.get(r.from);
+    if (startOn) {
+      const s0 = r.points[0]!;
+      check(startOn.points.some((p) => Math.hypot(p.x - s0.x, p.z - s0.z) < 3), `${r.id}: does not start on ${startOn.id}`);
+    }
+    const target = byId.get(r.to);
+    if (!target) continue;
+    const e = r.points[r.points.length - 1]!;
+    let best = Infinity;
+    let bh = 0;
+    target.points.forEach((p, i) => {
+      const d = Math.hypot(p.x - e.x, p.z - e.z);
+      if (d < best) {
+        best = d;
+        bh = target.heights[i]!;
+      }
+    });
+    check(best < 3, `${r.id}: ends ${best.toFixed(1)} m from ${target.id}`);
+    check(Math.abs(bh - r.heights[r.heights.length - 1]!) < 0.6, `${r.id}: meets ${target.id} at a ${Math.abs(bh - r.heights[r.heights.length - 1]!).toFixed(2)} m step`);
   }
 
   // Fields don't cover roads; fences don't cross roads.
@@ -139,10 +141,45 @@ export function validateWorld(plan: WorldPlan, terrain: Terrain, collision?: Col
     }
   }
 
-  // Castle summit is flat enough to stand on and the gate is reachable on foot.
-  const c = plan.castle;
-  check(Math.abs(terrain.height(c.x, c.z) - c.plateauHeight) < 0.5, 'castle summit pad not applied');
-  check(Math.abs(terrain.height(c.gate.x, c.gate.z) - c.plateauHeight) < 1.5, 'castle gate not level with the summit');
+  // Castle summits are flat enough to stand on and gates are reachable on foot.
+  for (const c of plan.castles) {
+    check(Math.abs(terrain.height(c.x, c.z) - c.plateauHeight) < 0.5, `${c.id}: summit pad not applied`);
+    check(Math.abs(terrain.height(c.gate.x, c.gate.z) - c.plateauHeight) < 1.5, `${c.id}: gate not level with the summit`);
+  }
+  // Sites and buildings stay inside the area.
+  for (const st of plan.sites) check(st.x > b.x0 && st.x < b.x1 && st.z > b.z0 && st.z < b.z1, `${st.id}: outside its area`);
 
+  return { ok: issues.length === 0, checks, issues };
+}
+
+/** The vale: shared checks plus its authored promises (spawn, footpath, the road to the castle). */
+export function validateWorld(plan: WorldPlan, terrain: TerrainLike, collision?: CollisionWorld): ValidationReport {
+  const base = validateContent(plan, terrain, collision, ['ancient-tree', 'watchtower']);
+  const issues = base.issues;
+  let checks = base.checks;
+  const check = (cond: boolean, msg: string): void => {
+    checks++;
+    if (!cond) issues.push(msg);
+  };
+  const main = plan.roads.find((r) => r.kind === 'trade-road');
+  if (main) {
+    const end = main.points[main.points.length - 1]!;
+    check(Math.hypot(end.x - plan.castle.gate.x, end.z - plan.castle.gate.z) < 3, 'Vale Road does not reach the castle gate');
+  }
+  const foot = plan.roads.find((r) => r.kind === 'footpath');
+  if (foot && main) {
+    const e = foot.points[foot.points.length - 1]!;
+    const j = main.points[0]!;
+    check(Math.hypot(e.x - j.x, e.z - j.z) < 3, 'Footpath does not meet the Vale Road');
+    const s0 = foot.points[0]!;
+    check(Math.hypot(s0.x - plan.spawn.x, s0.z - plan.spawn.z) < 8, 'Footpath does not start at the spawn clearing');
+  }
+  check(plan.roads.some((r) => r.id.includes('/gate/')), 'the vale has no road out to the wider world');
+  const sp = plan.spawn;
+  check(terrain.slope(sp.x, sp.z) < PLAYER.maxSlope * 0.6, `spawn slope ${terrain.slope(sp.x, sp.z).toFixed(2)} too steep`);
+  if (collision) {
+    const h = terrain.height(sp.x, sp.z);
+    check(!collision.blocked(sp.x, sp.z, PLAYER.radius, h, h + PLAYER.height, PLAYER.step), 'spawn point is inside a collider');
+  }
   return { ok: issues.length === 0, checks, issues };
 }

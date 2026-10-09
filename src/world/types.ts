@@ -29,7 +29,7 @@ export interface RoadPlan {
   to: string;
 }
 
-export type BuildingKind = 'cottage' | 'farmhouse' | 'barn' | 'shed' | 'longhouse';
+export type BuildingKind = 'cottage' | 'farmhouse' | 'barn' | 'shed' | 'longhouse' | 'church' | 'inn';
 export type WallStyle = 'stone' | 'timber' | 'plaster';
 export type RoofMaterial = 'tile' | 'slate' | 'thatch';
 
@@ -130,7 +130,7 @@ export interface Pad {
 export interface SettlementPlan {
   id: string;
   name: string;
-  kind: 'hamlet' | 'farmstead';
+  kind: 'hamlet' | 'farmstead' | 'village';
   x: number;
   z: number;
   buildingIds: string[];
@@ -142,13 +142,35 @@ export interface Clearing {
   radius: number;
 }
 
-export interface WorldPlan {
-  seed: string;
-  generatorVersion: number;
-  regionName: string;
-  spawn: { x: number; z: number; yaw: number };
-  ancientTree: { x: number; z: number };
-  castle: CastlePlan;
+/** A named place the player can discover (shown on the Atlas once found). */
+export type SiteKind = 'village' | 'hamlet' | 'farmstead' | 'cottage' | 'watchtower' | 'castle' | 'stones' | 'shrine' | 'camp' | 'crossroads';
+
+export interface SitePlan {
+  id: string;
+  kind: SiteKind;
+  name: string;
+  x: number;
+  z: number;
+  /** Discovery radius in metres. */
+  radius: number;
+}
+
+/** Axis-aligned world bounds of a piece of planned content. */
+export interface Bounds {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
+/**
+ * Everything planned for one area of the world (the opening vale, or one procedural region).
+ * Content never reaches outside its bounds, except roads that end exactly on a border gate.
+ */
+export interface WorldContent {
+  id: string;
+  bounds: Bounds;
+  castles: CastlePlan[];
   ruins: RuinPlan[];
   settlements: SettlementPlan[];
   buildings: BuildingPlan[];
@@ -157,11 +179,46 @@ export interface WorldPlan {
   fences: FencePlan[];
   pads: Pad[];
   clearings: Clearing[];
-  /** Tree-free view wedge from the spawn towards the castle (widens by `spread` per metre). */
-  sightline: { from: P2; to: P2; halfWidth: number; spread: number };
   props: PropPlan[];
   /** Weapons lying in the world; each is generated from its seed with a local luck bias. */
   finds: WeaponFind[];
+  /** Pads applied before roads are graded (castle summits). */
+  prePads: Pad[];
+  sites: SitePlan[];
+  /** Border crossings where this area's roads meet its neighbours'. */
+  gates: Gate[];
+  /** Tree-free view wedge (the vale's opening vista). */
+  sightline?: { from: P2; to: P2; halfWidth: number; spread: number };
+}
+
+export interface WorldPlan extends WorldContent {
+  seed: string;
+  generatorVersion: number;
+  regionName: string;
+  spawn: { x: number; z: number; yaw: number };
+  ancientTree: { x: number; z: number };
+  castle: CastlePlan;
+  /** Tree-free view wedge from the spawn towards the castle (widens by `spread` per metre). */
+  sightline: { from: P2; to: P2; halfWidth: number; spread: number };
+}
+
+/** A road crossing on a region border, agreed by the regions on both sides. */
+export interface Gate {
+  id: string;
+  x: number;
+  z: number;
+  /** Unit direction pointing into the region that owns this copy of the gate. */
+  inX: number;
+  inZ: number;
+}
+
+/** One procedurally planned region of the open world (a square cell of the region grid). */
+export interface RegionPlan extends WorldContent {
+  rx: number;
+  rz: number;
+  name: string;
+  /** Regional fortune: shifts the luck of everything found here (can be negative). */
+  fortune: number;
 }
 
 export interface WeaponFind {
@@ -169,7 +226,7 @@ export interface WeaponFind {
   x: number;
   z: number;
   yaw: number;
-  pose: 'lying' | 'stuck' | 'leaning';
+  pose: 'lying' | 'stuck' | 'leaning' | 'chest';
   seed: number;
   /** Luck bias for the rarity/condition roll (negative = humble places). */
   luck: number;
@@ -178,7 +235,23 @@ export interface WeaponFind {
   story: string;
 }
 
-export type PropKind = 'well' | 'haystack' | 'cart' | 'barrel' | 'signpost' | 'waystone' | 'woodpile' | 'bench' | 'chopping-block';
+export type PropKind =
+  | 'well'
+  | 'haystack'
+  | 'cart'
+  | 'barrel'
+  | 'signpost'
+  | 'waystone'
+  | 'woodpile'
+  | 'bench'
+  | 'chopping-block'
+  | 'chest'
+  | 'standing-stone'
+  | 'shrine'
+  | 'tent'
+  | 'campfire'
+  | 'lantern'
+  | 'grave';
 
 export interface PropPlan {
   id: string;
@@ -188,4 +261,8 @@ export interface PropPlan {
   yaw: number;
   /** Optional sign text for signposts. */
   label?: string;
+  /** Size multiplier (standing stones; negative = fallen). */
+  scale?: number;
+  /** What the player reads when examining it. */
+  text?: string;
 }

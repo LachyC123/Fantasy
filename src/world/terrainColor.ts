@@ -9,9 +9,8 @@ import { deriveSeed } from '../core/rng';
 import { smoothstep, clamp } from '../core/math';
 import { pointInObb } from './geometry2d';
 import { padDistance } from './terrain';
-import type { Terrain } from './terrain';
+import type { TerrainLike } from './terrain';
 import type { Ecology } from './ecology';
-import type { WorldPlan } from './types';
 
 const C = (h: string): THREE.Color => new THREE.Color(h);
 
@@ -40,19 +39,18 @@ export class TerrainColorizer {
   private readonly tmp = new THREE.Color();
 
   constructor(
-    readonly plan: WorldPlan,
-    readonly terrain: Terrain,
+    readonly terrain: TerrainLike,
     readonly ecology: Ecology,
   ) {
-    this.nPatch = new Noise2D(deriveSeed(plan.seed, 'terrain/colour'));
-    this.nFine = new Noise2D(deriveSeed(plan.seed, 'terrain/colour-fine'));
+    this.nPatch = new Noise2D(deriveSeed(ecology.seed, 'terrain/colour'));
+    this.nFine = new Noise2D(deriveSeed(ecology.seed, 'terrain/colour-fine'));
   }
 
   /**
    * Colour at a point. `detailed` enables per-feature masks (roads, fields,
    * exact forest density) which only matter for nearby terrain.
    */
-  color(x: number, z: number, h: number, ny: number, detailed: boolean, out: THREE.Color): THREE.Color {
+  color(x: number, z: number, h: number, ny: number, detailed: boolean, out: THREE.Color, roads = true): THREE.Color {
     const patch = this.nPatch.fbm(x / 70, z / 70, 3);
     const fine = this.nFine.sample(x / 9, z / 9);
     // Meadow base: broad brush patches between three greens and dry gold.
@@ -72,18 +70,20 @@ export class TerrainColorizer {
     out.lerp(PAL.snow, smoothstep(620, 700, h + patch * 80) * smoothstep(0.9, 0.6, slope));
 
     if (detailed) {
-      // Fields.
-      for (const f of this.plan.fields) {
-        if (Math.abs(f.x - x) > 40 || Math.abs(f.z - z) > 40) continue;
-        if (!pointInObb({ x: f.x, z: f.z, yaw: f.yaw, hw: f.width / 2, hd: f.depth / 2 }, x, z, -0.5)) continue;
-        const crop = PAL[f.crop];
-        out.lerp(crop, 0.85).multiplyScalar(0.94 + 0.12 * fine);
-      }
-      // Trodden ground around buildings and the ruin.
-      for (const p of this.plan.pads) {
-        if (Math.abs(p.x - x) > 30 || Math.abs(p.z - z) > 30) continue;
-        const d = padDistance(p, x, z);
-        out.lerp(PAL.trodden, (1 - smoothstep(0, 4, d)) * 0.45);
+      for (const plan of this.ecology.source.contentsNear(x, z)) {
+        // Fields.
+        for (const f of plan.fields) {
+          if (Math.abs(f.x - x) > 40 || Math.abs(f.z - z) > 40) continue;
+          if (!pointInObb({ x: f.x, z: f.z, yaw: f.yaw, hw: f.width / 2, hd: f.depth / 2 }, x, z, -0.5)) continue;
+          const crop = PAL[f.crop];
+          out.lerp(crop, 0.85).multiplyScalar(0.94 + 0.12 * fine);
+        }
+        // Trodden ground around buildings and ruins.
+        for (const p of plan.pads) {
+          if (Math.abs(p.x - x) > 30 || Math.abs(p.z - z) > 30) continue;
+          const d = padDistance(p, x, z);
+          out.lerp(PAL.trodden, (1 - smoothstep(0, 4, d)) * 0.45);
+        }
       }
       // Road shoulders.
       const hit = this.terrain.roadIndex.query(x, z);
@@ -92,7 +92,7 @@ export class TerrainColorizer {
         const k = 1 - smoothstep(w - 0.3, w + (hit.road.kind === 'trade-road' ? 2.2 : 1.2), hit.dist + fine * 0.6);
         out.lerp(PAL.dirt, clamp(k, 0, 1) * 0.9);
       }
-    } else {
+    } else if (roads) {
       // Distant roads still read as pale threads across the valley.
       const hit = this.terrain.roadIndex.query(x, z);
       if (hit && hit.dist < hit.road.halfWidth + 2.5) out.lerp(PAL.dirt, 0.75);

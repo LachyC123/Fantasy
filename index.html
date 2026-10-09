@@ -118,6 +118,7 @@
 
       <!-- HUD -->
       <div id="hud" hidden>
+        <div class="compass" aria-hidden="true"></div>
         <div class="crosshair"></div>
         <div class="prompt" hidden></div>
         <div class="hint-line" aria-live="polite"></div>
@@ -147,14 +148,39 @@
         <h2>Paused</h2>
         <nav class="menu">
           <button data-action="resume" class="primary">Resume</button>
+          <button data-action="atlas">Atlas</button>
           <button data-action="open-settings">Settings</button>
           <button data-action="controls">Controls</button>
           <button data-action="to-title">Return to Title</button>
         </nav>
         <div class="controls-list" hidden>
           <p><b>W A S D</b> move · <b>Mouse</b> look · <b>Shift</b> sprint · <b>Space</b> jump</p>
-          <p><b>Left click</b> swing · <b>E</b> read / examine / take · <b>I</b> inspect your weapon · <b>Esc</b> pause · <b>F3</b> debug overlay</p>
+          <p><b>Left click</b> swing · <b>E</b> read / open / take · <b>I</b> inspect your weapon · <b>M</b> the Atlas · <b>Esc</b> pause · <b>F3</b> debug overlay</p>
           <p class="only-touch"><b>Touch:</b> left thumb anywhere on the left walks (push to the edge to run) · drag elsewhere to look · <b>Swing</b>, <b>Jump</b>, <b>Use</b> and <b>Weapon</b> buttons · <b>❚❚</b> pauses</p>
+        </div>
+      </section>
+
+      <!-- The Hollow Atlas: the map of everything you have explored -->
+      <section id="atlas" aria-label="The Hollow Atlas" hidden>
+        <div class="atlas-sheet">
+          <header class="atlas-head">
+            <div>
+              <h2>The Hollow Atlas</h2>
+              <p class="atlas-region"></p>
+            </div>
+            <div class="atlas-tools">
+              <button data-atlas="in" title="Zoom in (+)">+</button>
+              <button data-atlas="out" title="Zoom out (−)">−</button>
+              <button data-atlas="close" title="Close (M)">Close</button>
+            </div>
+          </header>
+          <div class="atlas-body">
+            <canvas class="atlas-map" aria-label="Map of explored lands"></canvas>
+            <aside>
+              <p class="atlas-stats"></p>
+              <ul class="atlas-places"></ul>
+            </aside>
+          </div>
         </div>
       </section>
 

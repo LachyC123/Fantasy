@@ -4,7 +4,7 @@
  * player first comes upon a real generated place.
  */
 import type { UI } from '../ui/ui';
-import type { WorldPlan } from '../world/types';
+import type { SiteKind, SitePlan } from '../world/types';
 
 interface Step {
   html: string;
@@ -38,37 +38,40 @@ const TOUCH_STEPS: Step[] = [
   { html: 'Follow the path down to the vale. <b>Use</b> reads signs and stones.', done: (s) => s.moved > 140 || s.interacted },
 ];
 
-interface Place {
-  id: string;
-  kicker: string;
-  name: string;
-  x: number;
-  z: number;
-  radius: number;
-}
+const KICKER: Record<SiteKind, string> = {
+  village: 'Village',
+  hamlet: 'Hamlet',
+  farmstead: 'Farmstead',
+  cottage: 'Cottage',
+  watchtower: 'Ruin',
+  castle: 'Castle',
+  stones: 'Standing stones',
+  shrine: 'Wayside shrine',
+  camp: 'Camp',
+  crossroads: 'Crossroads',
+};
 
 export class Guidance {
   readonly state: GuidanceState = { moved: 0, looked: 0, sprinted: 0, jumped: false, swung: false, interacted: false };
   private step = 0;
   private stepTimer = 0;
   private gap = 1.2;
-  private readonly places: Place[];
-  private readonly seen = new Set<string>();
+  /** Places already found this journey (by id). */
+  readonly seen = new Set<string>();
   private readonly steps: Step[];
+  private scan = 0;
+  private region = '';
+  /** Called once per place, the first time the player comes upon it. */
+  onDiscover: ((site: SitePlan) => void) | null = null;
 
   constructor(
     private readonly ui: UI,
-    plan: WorldPlan,
+    private readonly sites: () => SitePlan[],
+    private readonly regionAt: (x: number, z: number) => string,
+    private readonly greatCastle: string,
     touch = false,
   ) {
     this.steps = touch ? TOUCH_STEPS : STEPS;
-    this.places = [];
-    for (const s of plan.settlements) {
-      if (s.kind === 'hamlet') this.places.push({ id: s.id, kicker: 'Hamlet', name: s.name, x: s.x, z: s.z, radius: 80 });
-      else if (s.id === 'farm') this.places.push({ id: s.id, kicker: 'Farmstead', name: s.name, x: s.x, z: s.z, radius: 55 });
-    }
-    for (const r of plan.ruins) this.places.push({ id: r.id, kicker: 'Ruin', name: r.name, x: r.x, z: r.z, radius: 22 });
-    this.places.push({ id: plan.castle.id, kicker: 'The great castle', name: plan.castle.name, x: plan.castle.gate.x, z: plan.castle.gate.z, radius: 70 });
   }
 
   update(dt: number, px: number, pz: number): void {
@@ -87,13 +90,26 @@ export class Guidance {
         }
       }
     }
-    // Place discovery banners (first visit only).
-    for (const p of this.places) {
+    // Discovery (first visit only), checked a few times a second.
+    this.scan -= dt;
+    if (this.scan > 0) return;
+    this.scan = 0.3;
+    for (const p of this.sites()) {
       if (this.seen.has(p.id)) continue;
       if (Math.hypot(px - p.x, pz - p.z) < p.radius) {
         this.seen.add(p.id);
-        this.ui.banner(p.kicker, p.name, 5);
+        const kicker = p.kind === 'castle' && p.id === this.greatCastle ? 'The great castle' : KICKER[p.kind];
+        this.ui.banner(kicker, p.name, 5);
+        this.onDiscover?.(p);
+        return;
       }
+    }
+    // Crossing into a new region names it.
+    const r = this.regionAt(px, pz);
+    if (r !== this.region) {
+      const first = this.region === '';
+      this.region = r;
+      if (!first) this.ui.banner('You enter', r, 4);
     }
   }
 

@@ -23,11 +23,15 @@ import { starterWeapon } from '../gameplay/loot';
 import { RARITY_COLOURS } from '../gameplay/luck';
 import type { WeaponGenome } from '../gameplay/weapons';
 import { Gallery } from './gallery';
+import { Atlas } from '../ui/atlas';
+import { Compass, type CompassMark } from '../ui/compass';
+import { Exploration } from '../gameplay/exploration';
+import { cellOf, REGION } from '../world/regions';
 import { isTouchDevice } from './device';
 import { TouchControls } from './touch';
 import { VIEW_DISTANCES } from './settings';
 
-type State = 'boot' | 'title' | 'loading' | 'intro' | 'capture' | 'playing' | 'paused' | 'gallery';
+type State = 'boot' | 'title' | 'loading' | 'intro' | 'capture' | 'playing' | 'paused' | 'atlas' | 'gallery';
 
 export interface GameOptions {
   autotest: boolean;
@@ -47,6 +51,13 @@ export class Game {
   readonly ui = new UI();
   readonly audio = new AudioManager();
   readonly viewModel: ViewModel;
+  readonly atlas = new Atlas();
+  readonly compass = new Compass();
+  /** Fog of war and discovered places for this journey. */
+  exploration = new Exploration();
+  private atlasReturn: 'playing' | 'paused' = 'playing';
+  private compassTimer = 0;
+  private compassMarks: CompassMark[] = [];
   /** On-screen controls on phones and tablets (null with a mouse and keyboard). */
   readonly touch: TouchControls | null;
   settings: Settings;
@@ -122,7 +133,9 @@ export class Game {
     const touch = isTouchDevice();
     document.body.classList.toggle('touch', touch);
     this.ui.touch = touch;
-    this.touch = touch ? new TouchControls(this.input, { pause: () => this.pause() }) : null;
+    this.touch = touch ? new TouchControls(this.input, { pause: () => this.pause(), map: () => this.openAtlas() }) : null;
+    this.atlas.onClose = () => this.closeAtlas();
+    this.atlas.onZoom = () => this.drawAtlas();
 
     this.scene.add(this.sky, this.sun, this.sun.target, this.hemi);
     this.sun.castShadow = true;
@@ -153,11 +166,13 @@ export class Game {
 
   start(): void {
     this.ui.show('title');
-    this.ui.seedInput.value = this.opts.seed ?? REFERENCE_SEED;
+    // Every journey starts in a new world unless a seed is asked for.
+    const seed = this.opts.seed ?? randomSeedName();
+    this.ui.seedInput.value = seed;
     this.state = 'title';
     this.ui.setTitleStatus('Preparing the vale…', false);
-    // Build the reference world behind the title as a living backdrop.
-    this.building = this.loadWorld(this.opts.seed ?? REFERENCE_SEED, (stage, f) => {
+    // Build the world behind the title as a living backdrop.
+    this.building = this.loadWorld(seed, (stage, f) => {
       if (this.state === 'title') this.ui.setTitleStatus(`${stage}… ${Math.round(f * 100)}%`, false);
       if (this.state === 'loading') this.ui.setProgress(f, stage);
     }).then(() => {
@@ -220,7 +235,9 @@ export class Game {
     this.player!.teleport(w.plan.spawn.x, w.plan.spawn.z);
     this.yaw = w.plan.spawn.yaw;
     this.pitch = -0.28;
-    this.guidance = new Guidance(this.ui, w.plan, this.touch !== null);
+    this.guidance = new Guidance(this.ui, () => w.sites, (x, z) => w.regionNameAt(x, z), w.plan.castle.id, this.touch !== null);
+    this.exploration = new Exploration();
+    this.guidance.onDiscover = (s) => this.exploration.discover(s);
     this.ui.setProgress(1, 'Ready');
     this.history.replaceState(seed);
     this.startIntro();
@@ -350,10 +367,94 @@ export class Game {
       case 'controls':
         this.ui.toggleControls();
         break;
+      case 'atlas':
+        this.openAtlas();
+        break;
       case 'to-title':
         this.toTitle();
         break;
     }
+  }
+
+  // ---------------------------------------------------------------- the Atlas
+
+  private openAtlas(): void {
+    if (!this.world || !this.player || (this.state !== 'playing' && this.state !== 'paused')) return;
+    this.atlasReturn = this.state === 'paused' ? 'paused' : 'playing';
+    this.state = 'atlas';
+    this.input.enabled = false;
+    if (this.touch) this.touch.visible = false;
+    this.ui.prompt(null);
+    this.ui.show(null);
+    this.atlas.show(true);
+    this.drawAtlas();
+  }
+
+  private closeAtlas(): void {
+    if (this.state !== 'atlas') return;
+    this.atlas.show(false);
+    if (this.atlasReturn === 'paused') {
+      this.state = 'paused';
+      this.ui.show('pause');
+      return;
+    }
+    if (this.opts.autotest || this.touch || this.input.locked) this.enterPlay();
+    else this.enterCapture();
+  }
+
+  private drawAtlas(): void {
+    const w = this.world;
+    const p = this.player;
+    if (!w || !p || !this.atlas.visible) return;
+    const extent = this.atlas.extent;
+    const ex = this.exploration;
+    const regions: { name: string; x: number; z: number }[] = [];
+    for (let rx = cellOf(p.x - extent / 2); rx <= cellOf(p.x + extent / 2); rx++)
+      for (let rz = cellOf(p.z - extent / 2); rz <= cellOf(p.z + extent / 2); rz++) {
+        const cx = (rx + 0.5) * REGION;
+        const cz = (rz + 0.5) * REGION;
+        if (!ex.explored(cx, cz) && !ex.discovered.some((s) => cellOf(s.x) === rx && cellOf(s.z) === rz)) continue;
+        const name = w.regionNameAt(cx, cz);
+        if (!regions.some((r) => r.name === name)) regions.push({ name, x: cx, z: cz });
+      }
+    const km = ex.travelled / 1000;
+    this.atlas.draw({
+      x: p.x,
+      z: p.z,
+      yaw: this.yaw,
+      extent,
+      height: (x, z) => w.macro.height(x, z),
+      forest: (x, z, h) => w.ecology.forestBase(x, z, h),
+      explored: (x, z) => ex.explored(x, z),
+      roads: w.index.cached.flatMap((a) => a.content.roads),
+      sites: ex.discovered,
+      regions,
+      heading: `${w.regionNameAt(p.x, p.z)} — the world of “${w.seed}”`,
+      stats: `${ex.discovered.length} ${ex.discovered.length === 1 ? 'place' : 'places'} found · ${km < 1 ? `${Math.round(ex.travelled)} m` : `${km.toFixed(1)} km`} travelled`,
+    });
+  }
+
+  /** Compass marks: places you know, and the faint pull of nearby places you do not. */
+  private updateCompass(dt: number): void {
+    const w = this.world;
+    const p = this.player;
+    if (!w || !p) return;
+    this.compassTimer -= dt;
+    if (this.compassTimer <= 0) {
+      this.compassTimer = 0.5;
+      const marks: (CompassMark & { d: number })[] = [];
+      for (const s of this.exploration.discovered) {
+        const d = Math.hypot(s.x - p.x, s.z - p.z);
+        if (d < 2500 && d > s.radius * 0.5) marks.push({ id: s.id, x: s.x, z: s.z, known: true, name: s.name, d });
+      }
+      for (const s of w.sites) {
+        if (s.kind === 'crossroads' || this.exploration.isDiscovered(s.id)) continue;
+        const d = Math.hypot(s.x - p.x, s.z - p.z);
+        if (d < 420) marks.push({ id: s.id, x: s.x, z: s.z, known: false, name: '', d });
+      }
+      this.compassMarks = marks.sort((a, b) => a.d - b.d).slice(0, 12);
+    }
+    this.compass.update(this.yaw, p.x, p.z, this.compassMarks);
   }
 
   private onLockChange(locked: boolean): void {
@@ -365,6 +466,17 @@ export class Game {
     if (code === 'F3') {
       this.debugOn = !this.debugOn;
       if (!this.debugOn) this.ui.debug(null);
+      return;
+    }
+    if (code === 'KeyM') {
+      if (this.state === 'playing') this.openAtlas();
+      else if (this.state === 'atlas') this.closeAtlas();
+      return;
+    }
+    if (this.state === 'atlas') {
+      if (code === 'Escape') this.closeAtlas();
+      else if (code === 'Equal' || code === 'NumpadAdd') this.atlas.setZoom(this.atlas.zoom - 1);
+      else if (code === 'Minus' || code === 'NumpadSubtract') this.atlas.setZoom(this.atlas.zoom + 1);
       return;
     }
     if (code === 'Escape') {
@@ -599,6 +711,8 @@ export class Game {
       g.state.swung = true;
     }
     g.update(dt, p.x, p.z);
+    this.exploration.visit(p.x, p.z);
+    this.updateCompass(dt);
 
     // Footsteps follow the stride; surface from the road/ruin data.
     const strideLen = sprint ? 1.6 : 1.25;
@@ -619,6 +733,20 @@ export class Game {
       },
     }));
     for (const f of w.loot.finds) {
+      if (Math.abs(f.anchor.x - p.x) > 6 || Math.abs(f.anchor.z - p.z) > 6) continue;
+      if (w.loot.isClosedChest(f.find.id)) {
+        targets.push({
+          position: f.anchor,
+          label: 'Open chest',
+          act: () => {
+            const inside = w.loot.open(f.find.id);
+            if (inside) this.ui.weaponCard(inside, `${f.find.story} Inside lies:`, 8);
+            this.audio.click();
+            g.state.interacted = true;
+          },
+        });
+        continue;
+      }
       targets.push({
         position: f.anchor,
         label: `Take ${f.weapon.title ?? f.weapon.name}`,
@@ -656,12 +784,13 @@ export class Game {
   private surfaceAt(x: number, z: number): Surface {
     const w = this.world!;
     const hit = w.terrain.roadIndex.query(x, z);
+    const near = w.contentsNear(x, z);
     if (hit && hit.dist < hit.road.halfWidth + 0.3) {
-      const hamlet = w.plan.settlements.find((s) => s.kind === 'hamlet');
-      if (hit.road.kind === 'trade-road' && hamlet && Math.hypot(x - hamlet.x, z - hamlet.z) < 80) return 'stone';
+      // Cobbled streets through hamlets and villages.
+      for (const c of near) for (const s of c.settlements) if ((s.kind === 'hamlet' || s.kind === 'village') && hit.road.kind === 'trade-road' && Math.hypot(x - s.x, z - s.z) < 80) return 'stone';
       return 'dirt';
     }
-    for (const r of w.plan.ruins) if (Math.hypot(x - r.x, z - r.z) < r.radius) return 'stone';
+    for (const c of near) for (const r of c.ruins) if (Math.hypot(x - r.x, z - r.z) < r.radius) return 'stone';
     return 'grass';
   }
 
@@ -790,6 +919,27 @@ export class Game {
         return { mean: sum / (d.length / 4), colours: colours.size };
       },
       settled: () => (this.world ? this.world.terrainStreamer.stats.queued === 0 && this.world.vegetation.stats.pending === 0 : false),
+      sites: () => this.world?.sites.map((s) => ({ ...s })) ?? [],
+      discovered: () => [...(this.guidance?.seen ?? [])],
+      streamStats: () => ({ ...this.world?.streamStats }),
+      /** Nearest planned site of a kind, searching region skeletons outward from a point. */
+      nearestSite: (kind: string, x = 0, z = 0) => {
+        const w = this.world;
+        if (!w) return null;
+        let best: { x: number; z: number; name: string; id: string; d: number } | null = null;
+        for (let r = 0; r < 6 && !best; r++)
+          for (let rx = Math.floor(x / 1024) - r; rx <= Math.floor(x / 1024) + r; rx++)
+            for (let rz = Math.floor(z / 1024) - r; rz <= Math.floor(z / 1024) + r; rz++) {
+              const sk = w.index.skeleton(rx, rz);
+              for (const s of sk?.sites ?? []) {
+                if (s.kind !== kind) continue;
+                const d = Math.hypot(s.x - x, s.z - z);
+                if (!best || d < best.d) best = { x: s.x, z: s.z, name: s.name, id: s.id, d };
+              }
+            }
+        return best;
+      },
+      regionPlan: (rx: number, rz: number) => this.world?.index.region(rx, rz),
     };
   }
 }

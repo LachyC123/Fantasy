@@ -5,7 +5,7 @@
  */
 import { smoothstep } from '../core/math';
 import type { MacroField } from './macro';
-import { RoadIndex } from './roads';
+import { RoadIndex, type RoadHit } from './roads';
 import type { Pad, RoadPlan } from './types';
 
 export function padDistance(p: Pad, x: number, z: number): number {
@@ -27,7 +27,7 @@ export function padDistance(p: Pad, x: number, z: number): number {
  * (a neighbour's falloff can never tilt it); in overlapping falloff zones the
  * pads' heights are averaged by weight so nothing steps or folds.
  */
-function applyPads(pads: readonly Pad[], h: number, x: number, z: number): number {
+export function applyPads(pads: readonly Pad[], h: number, x: number, z: number): number {
   let sumW = 0;
   let sumWH = 0;
   let maxW = 0;
@@ -46,7 +46,23 @@ function applyPads(pads: readonly Pad[], h: number, x: number, z: number): numbe
   return h + (sumWH / sumW - h) * maxW;
 }
 
-export class Terrain {
+export interface RoadLookup {
+  query(x: number, z: number): RoadHit | null;
+  surfaceDistance(x: number, z: number): number;
+}
+
+/** Anything that answers height questions the way `Terrain` does (a planning stage or the whole world). */
+export interface TerrainLike {
+  readonly macro: MacroField;
+  readonly roadIndex: RoadLookup;
+  heightBeforeRoads(x: number, z: number): number;
+  heightBeforeBuildings(x: number, z: number): number;
+  height(x: number, z: number): number;
+  normal(x: number, z: number, eps?: number): { x: number; y: number; z: number };
+  slope(x: number, z: number, eps?: number): number;
+}
+
+export class Terrain implements TerrainLike {
   readonly roadIndex: RoadIndex;
 
   constructor(

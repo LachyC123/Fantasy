@@ -100,14 +100,18 @@ export class ChimneySmoke {
   readonly pool: PointPool;
   private readonly puffs: Puff[] = [];
   private readonly rng = new Rng(0x5a0c);
-  private readonly emitters: THREE.Vector3[];
-  private spawnAcc: number[];
+  private emitters: THREE.Vector3[] = [];
+  private all: THREE.Vector3[] = [];
+  private spawnAcc: number[] = [];
+  private readonly maxEmitters: number;
+  private pick = 0;
 
-  constructor(emitters: THREE.Vector3[]) {
-    this.emitters = emitters;
-    this.spawnAcc = emitters.map(() => 0);
+  /** Chimneys anywhere in the loaded world; the nearest few actually smoke. */
+  constructor(emitters: THREE.Vector3[], maxEmitters = 36) {
+    this.maxEmitters = maxEmitters;
     const per = 26;
-    this.pool = new PointPool(Math.max(1, emitters.length * per), 0.35);
+    this.pool = new PointPool(maxEmitters * per, 0.35);
+    this.setEmitters(emitters);
     for (let i = 0; i < this.pool.capacity; i++) this.puffs.push({ emitter: -1, age: 0, life: 1, x: 0, y: -9999, z: 0, vx: 0, vy: 0, vz: 0 });
     this.pool.points.name = 'smoke';
   }
@@ -116,13 +120,33 @@ export class ChimneySmoke {
     this.pool.material.uniforms.uPixelScale!.value = s;
   }
 
-  update(dt: number, wind: THREE.Vector2): void {
+  setEmitters(all: THREE.Vector3[]): void {
+    this.all = all;
+    this.pick = 0;
+  }
+
+  private choose(cam: THREE.Vector3 | null): void {
+    const list = cam ? this.all.filter((e) => e.distanceToSquared(cam) < 600 * 600).sort((a, b) => a.distanceToSquared(cam) - b.distanceToSquared(cam)) : this.all;
+    const next = list.slice(0, this.maxEmitters);
+    // Puffs already drifting from a chimney that is no longer chosen simply fade out.
+    for (const p of this.puffs) if (p.emitter >= 0 && !next.includes(this.emitters[p.emitter]!)) p.emitter = -2;
+    for (const p of this.puffs) if (p.emitter >= 0) p.emitter = next.indexOf(this.emitters[p.emitter]!);
+    this.emitters = next;
+    this.spawnAcc = next.map(() => 0);
+  }
+
+  update(dt: number, wind: THREE.Vector2, cam: THREE.Vector3 | null = null): void {
+    this.pick -= dt;
+    if (this.pick <= 0) {
+      this.pick = 1.5;
+      this.choose(cam);
+    }
     const rng = this.rng;
     for (let e = 0; e < this.emitters.length; e++) {
       this.spawnAcc[e]! += dt * 3.2;
       while (this.spawnAcc[e]! >= 1) {
         this.spawnAcc[e]! -= 1;
-        const free = this.puffs.find((p) => p.emitter < 0);
+        const free = this.puffs.find((p) => p.emitter === -1);
         if (!free) break;
         const src = this.emitters[e]!;
         Object.assign(free, { emitter: e, age: 0, life: rng.range(6, 9), x: src.x + rng.range(-0.15, 0.15), y: src.y, z: src.z + rng.range(-0.15, 0.15), vx: rng.range(-0.1, 0.1), vy: rng.range(0.9, 1.3), vz: rng.range(-0.1, 0.1) });
@@ -131,7 +155,7 @@ export class ChimneySmoke {
     const P = this.pool;
     for (let i = 0; i < this.puffs.length; i++) {
       const p = this.puffs[i]!;
-      if (p.emitter < 0) {
+      if (p.emitter === -1) {
         P.alpha[i] = 0;
         P.pos[i * 3 + 1] = -9999;
         continue;

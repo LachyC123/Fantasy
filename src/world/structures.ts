@@ -12,8 +12,8 @@ import { buildCastle } from '../assets/castle';
 import { generateTree } from '../assets/trees';
 import type { MaterialLibrary, MaterialName } from '../rendering/materials';
 import type { CollisionWorld } from '../player/collision';
-import type { Terrain } from './terrain';
-import type { FencePlan, PropPlan, RuinPlan, WorldPlan } from './types';
+import type { TerrainLike } from './terrain';
+import type { CastlePlan, FencePlan, P2, PropPlan, RuinPlan, WorldContent } from './types';
 import { getTextures } from '../rendering/textures';
 import { patchMaterial } from '../rendering/atmosphere';
 
@@ -99,7 +99,7 @@ function ruinTower(b: MeshBuilder, r: RuinPlan, world: CollisionWorld, road: { x
   }
 }
 
-function prop(b: MeshBuilder, p: PropPlan, terrain: Terrain, world: CollisionWorld): void {
+function prop(b: MeshBuilder, p: PropPlan, terrain: TerrainLike, world: CollisionWorld): void {
   const y = terrain.height(p.x, p.z);
   const m = trs(p.x, y, p.z, p.yaw);
   switch (p.kind) {
@@ -167,6 +167,86 @@ function prop(b: MeshBuilder, p: PropPlan, terrain: Terrain, world: CollisionWor
       world.addCircle({ x: p.x, z: p.z, r: 0.4, y0: y - 0.5, y1: y + 0.5, tag: p.id });
       break;
     }
+    case 'chest': {
+      // The chest's body; its lid (and what lies inside) belong to the loot system.
+      b.box('planks', m, 0, 0.22, 0, 0.92, 0.46, 0.6, { color: col('#b88a5c'), aoBottom: 0.35 });
+      for (const sx of [-0.3, 0.3]) b.box('metal', m, sx, 0.23, 0, 0.07, 0.48, 0.62, { color: col('#3a3430') });
+      b.box('metal', m, 0, 0.32, 0.31, 0.12, 0.14, 0.03, { color: col('#c8a050') });
+      world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.48, hd: 0.32, y0: y - 0.5, y1: y + 0.62, tag: p.id });
+      break;
+    }
+    case 'standing-stone': {
+      const sc = Math.abs(p.scale ?? 1);
+      const rng = new Rng(deriveSeed(p.id, 'stone'));
+      const tone = col('#d6d0c4').multiplyScalar(rng.range(0.82, 1.02));
+      if ((p.scale ?? 1) < 0) {
+        // Fallen: lying on its side, half sunk in the turf.
+        b.box('ruinStone', m.clone().multiply(trs(0, 0.25 * sc, 0, rng.range(-0.3, 0.3), 1, 1, 1, Math.PI / 2 - 0.08, 0)), 0, 0, 0, 0.95 * sc, 2.6 * sc, 0.5 * sc, { color: tone, aoBottom: 0.3 });
+        world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.5 * sc, hd: 1.35 * sc, y0: y - 0.5, y1: y + 0.55 * sc, tag: p.id });
+      } else {
+        const lean = trs(0, 0, 0, 0, 1, 1, 1, rng.range(-0.06, 0.06), rng.range(-0.06, 0.06));
+        const sm = m.clone().multiply(lean);
+        b.box('ruinStone', sm, 0, 1.1 * sc - 0.4, 0, 0.95 * sc, 2.2 * sc + 0.8, 0.5 * sc, { color: tone, aoBottom: 0.45 });
+        b.box('ruinStone', sm, 0, 2.3 * sc - 0.35, 0, 0.75 * sc, 0.35 * sc, 0.42 * sc, { color: tone.clone().multiplyScalar(0.95) });
+        if (rng.chance(0.4)) b.box('foliagePlain', sm, 0, 0.35, 0.26 * sc, 0.8 * sc, 0.5, 0.06, { color: col('#5f7a3a') });
+        world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.5 * sc, hd: 0.28 * sc, y0: y - 0.5, y1: y + 2.4 * sc, tag: p.id });
+      }
+      break;
+    }
+    case 'shrine': {
+      b.box('stone', m, 0, 0.25, 0, 1.5, 1.1, 1.1, { color: col('#d8d0c0'), aoBottom: 0.4 });
+      b.box('stone', m, 0, 1.45, -0.42, 1.3, 1.6, 0.26, { color: col('#ccc4b4') });
+      for (const sx of [-0.58, 0.58]) b.box('stone', m, sx, 1.45, -0.1, 0.18, 1.6, 0.5, { color: col('#c8c0b0') });
+      b.box('slate', m.clone().multiply(trs(0, 2.38, -0.1, 0, 1, 1, 1, -0.18, 0)), 0, 0, 0, 1.7, 0.14, 1.0, { color: col('#ffffff') });
+      // The saint: a small weathered figure in the niche.
+      b.cylinder('ruinStone', m, 0, 0.8, -0.18, 0.16, 0.2, 0.75, 7, { color: col('#e6e0d4') }, { capTop: true, flat: true });
+      b.cylinder('ruinStone', m, 0, 1.6, -0.18, 0.11, 0.11, 0.2, 7, { color: col('#e6e0d4') }, { capTop: true, flat: true });
+      for (const sx of [-0.4, -0.25, 0.32]) b.box('glowWindow', m, sx, 0.88, 0.25, 0.06, 0.16, 0.06, { color: col('#ffffff') });
+      world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.78, hd: 0.58, y0: y - 0.5, y1: y + 2.4, tag: p.id });
+      break;
+    }
+    case 'tent': {
+      const rng = new Rng(deriveSeed(p.id, 'tent'));
+      const canvas = rng.pick([col('#d8c8a0'), col('#b8a888'), col('#a89878'), col('#c8b8a0')]);
+      const W = 2.4;
+      const H = 1.7;
+      const L = 2.8;
+      const half = W / 2;
+      const slope = Math.hypot(half, H);
+      const ang = Math.atan2(H, half);
+      for (const sx of [-1, 1]) b.box('plaster', m.clone().multiply(trs(sx * half / 2, H / 2, 0, 0, 1, 1, 1, 0, sx * -(Math.PI / 2 - ang))), 0, 0, 0, 0.05, slope, L, { color: canvas, aoBottom: 0.3 });
+      b.box('timber', m, 0, H + 0.02, 0, 0.08, 0.08, L + 0.3, { color: col('#ffffff') });
+      for (const sz of [-1, 1]) b.box('timber', m, 0, H / 2, sz * (L / 2 + 0.1), 0.08, H, 0.08, { color: col('#ffffff') });
+      // A dark doorway on the +Z end.
+      b.tri('plain', new THREE.Vector3(-half * 0.8, 0.02, L / 2).applyMatrix4(m), new THREE.Vector3(half * 0.8, 0.02, L / 2).applyMatrix4(m), new THREE.Vector3(0, H * 0.9, L / 2).applyMatrix4(m), [0, 0], [1, 0], [0.5, 1], col('#2a241e'));
+      b.tri('plain', new THREE.Vector3(half, 0.02, -L / 2).applyMatrix4(m), new THREE.Vector3(-half, 0.02, -L / 2).applyMatrix4(m), new THREE.Vector3(0, H, -L / 2).applyMatrix4(m), [0, 0], [1, 0], [0.5, 1], canvas);
+      world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: half, hd: L / 2, y0: y - 0.5, y1: y + H, tag: p.id });
+      break;
+    }
+    case 'campfire': {
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        b.box('rock', m.clone().multiply(trs(Math.sin(a) * 0.75, 0.08, Math.cos(a) * 0.75, a)), 0, 0, 0, 0.3, 0.24, 0.22, { color: col('#a8a090') });
+      }
+      for (let i = 0; i < 4; i++) b.box('bark', m.clone().multiply(trs(0, 0.12, 0, i * 0.8, 1, 1, 1, 0, 0.25)), 0, 0, 0, 0.12, 0.12, 1.0, { color: col('#5a4a3a') });
+      b.box('plain', m, 0, 0.04, 0, 0.9, 0.04, 0.9, { color: col('#2a2420') });
+      world.addCircle({ x: p.x, z: p.z, r: 0.9, y0: y - 0.5, y1: y + 0.3, tag: p.id });
+      break;
+    }
+    case 'lantern': {
+      b.box('timber', m, 0, 1.35, 0, 0.14, 2.9, 0.14, { color: col('#ffffff'), aoBottom: 0.3 });
+      b.box('timber', m, 0, 2.7, 0.3, 0.1, 0.1, 0.65, { color: col('#ffffff') });
+      b.box('metal', m, 0, 2.38, 0.55, 0.3, 0.06, 0.3, { color: col('#3a3430') });
+      b.box('glowWindow', m, 0, 2.18, 0.55, 0.22, 0.34, 0.22, { color: col('#ffffff') });
+      b.box('metal', m, 0, 1.99, 0.55, 0.26, 0.05, 0.26, { color: col('#3a3430') });
+      world.addCircle({ x: p.x, z: p.z, r: 0.15, y0: y - 0.5, y1: y + 2.8, tag: p.id });
+      break;
+    }
+    case 'grave': {
+      b.box('ruinStone', m, 0, 0.45, 0, 0.6, 1.1, 0.14, { color: col('#c8c0b0'), aoBottom: 0.3 });
+      world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.32, hd: 0.1, y0: y - 0.5, y1: y + 0.95, tag: p.id });
+      break;
+    }
     case 'bench': {
       b.box('planks', m, 0, 0.45, 0, 1.6, 0.08, 0.4, { color: col('#c0a080') });
       world.addBox({ x: p.x, z: p.z, yaw: p.yaw, hw: 0.8, hd: 0.2, y0: y, y1: y + 0.5, tag: p.id });
@@ -175,7 +255,7 @@ function prop(b: MeshBuilder, p: PropPlan, terrain: Terrain, world: CollisionWor
   }
 }
 
-function fence(b: MeshBuilder, f: FencePlan, terrain: Terrain, world: CollisionWorld): void {
+function fence(b: MeshBuilder, f: FencePlan, terrain: TerrainLike, world: CollisionWorld): void {
   const rng = new Rng(deriveSeed(f.id, 'fence'));
   // Split into short spans that follow the ground.
   const pts: { x: number; z: number }[] = [];
@@ -222,9 +302,10 @@ function fence(b: MeshBuilder, f: FencePlan, terrain: Terrain, world: CollisionW
 }
 
 /** Road surface ribbons with ragged alpha-tested edges, conforming to final terrain. */
-function roadRibbons(plan: WorldPlan, terrain: Terrain, group: THREE.Group): void {
+function* roadRibbons(plan: WorldContent, terrain: TerrainLike, group: THREE.Group): Generator<void, void, void> {
   const t = getTextures();
-  const hamlet = plan.settlements.find((s) => s.kind === 'hamlet');
+  // Streets through hamlets and villages are cobbled.
+  const towns = plan.settlements.filter((s) => s.kind === 'hamlet' || s.kind === 'village');
   const edgeTex = (() => {
     const w = 64;
     const h = 64;
@@ -275,7 +356,7 @@ function roadRibbons(plan: WorldPlan, terrain: Terrain, group: THREE.Group): voi
     for (let start = 0; start < road.points.length - 1; start += chunk) {
       const end = Math.min(road.points.length - 1, start + chunk);
       const midP = road.points[Math.floor((start + end) / 2)]!;
-      const cobbled = road.kind === 'trade-road' && hamlet !== undefined && Math.hypot(midP.x - hamlet.x, midP.z - hamlet.z) < 80;
+      const cobbled = road.kind === 'trade-road' && towns.some((tw) => Math.hypot(midP.x - tw.x, midP.z - tw.z) < 80);
       const pos: number[] = [];
       const nrm: number[] = [];
       const uv: number[] = [];
@@ -294,8 +375,7 @@ function roadRibbons(plan: WorldPlan, terrain: Terrain, group: THREE.Group): voi
           const z = p.z + nz * a * halfW;
           const y = terrain.height(x, z) + 0.05;
           pos.push(x, y, z);
-          const n = terrain.normal(x, z);
-          nrm.push(n.x, n.y, n.z);
+          nrm.push(0, 1, 0);
           uv.push(a * halfW, road.arc[i]!);
           // Wheel ruts: slightly darker bands either side of the crown.
           const rut = road.kind !== 'footpath' && Math.abs(Math.abs(a) - 0.5) < 0.01 ? 0.86 : 1;
@@ -303,8 +383,37 @@ function roadRibbons(plan: WorldPlan, terrain: Terrain, group: THREE.Group): voi
           colr.push(c, c * 0.98, c * 0.95);
         }
       }
-      const idx: number[] = [];
+      // Normals from neighbouring ribbon vertices (one height sample per vertex).
       const cols = across.length;
+      const rows = end - start + 1;
+      const at = (r: number, c: number): number => (Math.max(0, Math.min(rows - 1, r)) * cols + Math.max(0, Math.min(cols - 1, c))) * 3;
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++) {
+          const a0 = at(r - 1, c);
+          const a1 = at(r + 1, c);
+          const b0 = at(r, c - 1);
+          const b1 = at(r, c + 1);
+          const ux = pos[a1]! - pos[a0]!;
+          const uy = pos[a1 + 1]! - pos[a0 + 1]!;
+          const uz = pos[a1 + 2]! - pos[a0 + 2]!;
+          const vx = pos[b1]! - pos[b0]!;
+          const vy = pos[b1 + 1]! - pos[b0 + 1]!;
+          const vz = pos[b1 + 2]! - pos[b0 + 2]!;
+          let nx2 = uy * vz - uz * vy;
+          let ny2 = uz * vx - ux * vz;
+          let nz2 = ux * vy - uy * vx;
+          if (ny2 < 0) {
+            nx2 = -nx2;
+            ny2 = -ny2;
+            nz2 = -nz2;
+          }
+          const l = Math.hypot(nx2, ny2, nz2) || 1;
+          const o = (r * cols + c) * 3;
+          nrm[o] = nx2 / l;
+          nrm[o + 1] = ny2 / l;
+          nrm[o + 2] = nz2 / l;
+        }
+      const idx: number[] = [];
       for (let i = 0; i < end - start; i++) {
         for (let k = 0; k < cols - 1; k++) {
           const a = i * cols + k;
@@ -325,11 +434,29 @@ function roadRibbons(plan: WorldPlan, terrain: Terrain, group: THREE.Group): voi
       mesh.receiveShadow = true;
       mesh.name = `road ${road.name}`;
       group.add(mesh);
+      yield;
     }
   }
 }
 
-export function buildStructures(plan: WorldPlan, terrain: Terrain, materials: MaterialLibrary, world: CollisionWorld): StructureResult {
+export interface StructureOptions {
+  /** The tree the player wakes beneath (the vale only). */
+  ancientTree?: P2;
+}
+
+export function buildStructures(plan: WorldContent, terrain: TerrainLike, materials: MaterialLibrary, world: CollisionWorld, opts: StructureOptions = {}): StructureResult {
+  const steps = buildStructureSteps(plan, terrain, materials, world, opts);
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * The same build as a sequence of small steps, so a streamed region can be
+ * raised over several frames. The collision group must stay set while it runs.
+ */
+export function* buildStructureSteps(plan: WorldContent, terrain: TerrainLike, materials: MaterialLibrary, world: CollisionWorld, opts: StructureOptions = {}): Generator<void, StructureResult, void> {
   const group = new THREE.Group();
   group.name = 'structures';
   const smoke: THREE.Vector3[] = [];
@@ -338,27 +465,32 @@ export function buildStructures(plan: WorldPlan, terrain: Terrain, materials: Ma
     const r = buildBuilding(village, bp);
     r.colliders.forEach((c, i) => addBox(world, c, `${bp.id}/c${i}`));
     if (r.chimneyTop && bp.inhabited) smoke.push(r.chimneyTop);
+    yield;
   }
-  const mainRoad = plan.roads[0]!;
   for (const ruin of plan.ruins) {
-    let best = mainRoad.points[0]!;
-    let bd = Infinity;
-    for (const p of mainRoad.points) {
-      const d = Math.hypot(p.x - ruin.x, p.z - ruin.z);
-      if (d < bd) {
-        bd = d;
-        best = p;
+    // The doorway faces the nearest road (or the ruin's own heading where no road comes).
+    let best: P2 = { x: ruin.x + Math.sin(ruin.yaw) * 10, z: ruin.z + Math.cos(ruin.yaw) * 10 };
+    let bd = 400;
+    for (const road of plan.roads)
+      for (const p of road.points) {
+        const d = Math.hypot(p.x - ruin.x, p.z - ruin.z);
+        if (d < bd) {
+          bd = d;
+          best = p;
+        }
       }
-    }
     ruinTower(village, ruin, world, best);
+    yield;
   }
-  for (const p of plan.props) prop(village, p, terrain, world);
-  for (const f of plan.fences) fence(village, f, terrain, world);
-
-  const castleB = new MeshBuilder();
-  const castle = buildCastle(castleB, plan.castle);
-  for (const c of castle.boxes) world.addBox({ ...c, tag: plan.castle.id });
-  for (const c of castle.circles) world.addCircle({ ...c, tag: plan.castle.id });
+  let k = 0;
+  for (const p of plan.props) {
+    prop(village, p, terrain, world);
+    if (++k % 12 === 0) yield;
+  }
+  for (const f of plan.fences) {
+    fence(village, f, terrain, world);
+    yield;
+  }
 
   let triangles = 0;
   const emit = (builder: MeshBuilder, name: string, castShadow: boolean): void => {
@@ -372,26 +504,48 @@ export function buildStructures(plan: WorldPlan, terrain: Terrain, materials: Ma
     }
   };
   emit(village, 'village', true);
-  emit(castleB, 'castle', false);
+  yield;
 
   // The ancient tree the player wakes beneath.
-  const ancient = generateTree('ancient', 0);
-  const ay = terrain.height(plan.ancientTree.x, plan.ancientTree.z);
-  for (const [key, geo] of ancient.near) {
-    const mesh = new THREE.Mesh(geo, materials.get(key));
-    mesh.position.set(plan.ancientTree.x, ay - 0.3, plan.ancientTree.z);
-    mesh.castShadow = true;
+  if (opts.ancientTree) {
+    const at = opts.ancientTree;
+    const ancient = generateTree('ancient', 0);
+    const ay = terrain.height(at.x, at.z);
+    for (const [key, geo] of ancient.near) {
+      const mesh = new THREE.Mesh(geo, materials.get(key));
+      mesh.position.set(at.x, ay - 0.3, at.z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const depth = materials.depth(key);
+      if (depth) mesh.customDepthMaterial = depth;
+      mesh.name = `ancient-tree:${key}`;
+      group.add(mesh);
+      triangles += geo.getAttribute('position').count / 3;
+    }
+    world.addCircle({ x: at.x, z: at.z, r: ancient.trunkRadius * 1.15, y0: ay - 2, y1: ay + 30, tag: 'ancient-tree' });
+  }
+
+  yield* roadRibbons(plan, terrain, group);
+
+  return { group, smoke, spireTips: [], stats: { buildings: plan.buildings.length, colliders: 0, triangles } };
+}
+
+/** A castle's meshes and colliders (castles are landmarks, built from far away). */
+export function buildCastleStructure(castle: CastlePlan, materials: MaterialLibrary, world: CollisionWorld): { group: THREE.Group; spireTips: THREE.Vector3[]; triangles: number } {
+  const group = new THREE.Group();
+  group.name = `castle ${castle.name}`;
+  const b = new MeshBuilder();
+  const built = buildCastle(b, castle);
+  for (const c of built.boxes) world.addBox({ ...c, tag: castle.id });
+  for (const c of built.circles) world.addCircle({ ...c, tag: castle.id });
+  let triangles = 0;
+  for (const [key, geo] of b.build()) {
+    const mesh = new THREE.Mesh(geo, materials.get(key as MaterialName));
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
-    const depth = materials.depth(key);
-    if (depth) mesh.customDepthMaterial = depth;
-    mesh.name = `ancient-tree:${key}`;
+    mesh.name = `castle:${key}`;
     group.add(mesh);
     triangles += geo.getAttribute('position').count / 3;
   }
-  world.addCircle({ x: plan.ancientTree.x, z: plan.ancientTree.z, r: ancient.trunkRadius * 1.15, y0: ay - 2, y1: ay + 30, tag: 'ancient-tree' });
-
-  roadRibbons(plan, terrain, group);
-
-  const counts = world.counts;
-  return { group, smoke, spireTips: castle.spireTips, stats: { buildings: plan.buildings.length, colliders: counts.boxes + counts.circles, triangles } };
+  return { group, spireTips: built.spireTips, triangles };
 }

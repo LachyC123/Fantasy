@@ -10,11 +10,14 @@
 import { canonicalizeSeed, deriveSeed, GENERATOR_VERSION, Rng } from '../core/rng';
 import { MacroField } from './macro';
 import { planCastle, localToWorld } from './castle';
+import { ContentBuilder, castlePad } from './contentBuilder';
+import { VALE_BOUNDS, valeGates, type SiteSeed } from './regions';
+import { populateCamp, populateCottage, populateShrine, populateStones, populateWatchtower, siteLevelPads, type SiteContext } from './sitegen';
 import { buildRoad, RoadIndex, type RoadSpec } from './roads';
 import { Terrain } from './terrain';
 import { obbOverlap, obbSamples, pointInObb, type Obb } from './geometry2d';
 import { distSqToSegment } from '../core/math';
-import { villageName, towerName, farmName, familyName } from './names';
+import { villageName, towerName, farmName, familyName, stonesName, shrineName, campName, uniqueName } from './names';
 import type {
   BuildingKind,
   BuildingPlan,
@@ -36,9 +39,7 @@ import type {
 
 export const REFERENCE_SEED = 'reference-valley';
 
-export function castlePad(c: CastlePlan): Pad {
-  return { x: c.x, z: c.z, yaw: 0, halfW: c.plateauRadius, halfD: c.plateauRadius, circle: true, height: c.plateauHeight, falloff: 28 };
-}
+export { castlePad };
 
 export function createTerrain(plan: WorldPlan, macro = new MacroField(plan.seed)): Terrain {
   return new Terrain(macro, [castlePad(plan.castle)], plan.roads, plan.pads);
@@ -155,10 +156,10 @@ function roadFrame(road: RoadPlan, i: number): { p: P2; tx: number; tz: number; 
   return { p: road.points[i]!, tx, tz, nx: -tz, nz: tx };
 }
 
-export function generateWorldPlan(seedInput: string): WorldPlan {
+export function generateWorldPlan(seedInput: string, macroIn?: MacroField): WorldPlan {
   const seed = canonicalizeSeed(seedInput);
   const rng = new Rng(deriveSeed(seed, 'sites/v1'));
-  const macro = new MacroField(seed);
+  const macro = macroIn ?? new MacroField(seed);
   const castle = planCastle(seed, macro);
   const stageA = new Terrain(macro, [castlePad(castle)], [], []);
   const hA = (x: number, z: number): number => stageA.heightBeforeRoads(x, z);
@@ -533,20 +534,72 @@ export function generateWorldPlan(seedInput: string): WorldPlan {
     }
   }
 
+  // --- The vale opens onto the wider world ----------------------------------
+  const valeRuins = ctx.ruins.slice();
+  const cb = new ContentBuilder(seed, macro, `${seed}/vale`, VALE_BOUNDS, {
+    castles: [castle],
+    prePads: [castlePad(castle)],
+    ruins: ctx.ruins,
+    settlements,
+    buildings: ctx.buildings,
+    roads,
+    fields: ctx.fields,
+    fences,
+    clearings,
+    props,
+    finds,
+    gates: valeGates(seed, macro),
+  });
+  const hamlet = settlements.find((st) => st.kind === 'hamlet')!;
+  const farm = settlements.find((st) => st.id === farmId);
+  cb.reserves = [
+    { id: castle.id, x: castle.x, z: castle.z, r: castle.plateauRadius + 30 },
+    { id: 'spawn', x: ancientTree.x, z: ancientTree.z, r: 40 },
+    { id: hamlet.id, x: hamlet.x, z: hamlet.z, r: 60 },
+    ...(farm ? [{ id: farm.id, x: farm.x, z: farm.z, r: 125 }] : []),
+  ];
+  // Exit roads from the Vale Road out through every gate on the vale's border.
+  const order = cb.c.gates.slice().sort((a, b) => Math.hypot(a.x - junction.x, a.z - junction.z) - Math.hypot(b.x - junction.x, b.z - junction.z));
+  for (const g of order) {
+    cb.route({ id: `${g.id}/road`, name: 'The Old Road', kind: 'trade-road', from: g.id, start: { x: g.x, z: g.z }, gate: g, goals: cb.networkGoals((r) => r.kind === 'footpath') });
+  }
+  // Side places on the vale's hills: off the main road, for those who wander.
+  const extras = valeExtraSites(seed, macro, cb);
+  const sctx: SiteContext = { cb, fortune: 0.2 };
+  for (const st of extras) {
+    cb.reserves.push({ id: st.id, x: st.x, z: st.z, r: st.reserve });
+  }
+  const xr = new Rng(deriveSeed(seed, 'vale/extras-connect'));
+  for (const st of extras) {
+    const connect = xr.chance(0.6);
+    if (st.kind === 'watchtower') populateWatchtower(sctx, st, connect);
+    else if (st.kind === 'stones') populateStones(sctx, st, connect);
+    else if (st.kind === 'shrine') populateShrine(sctx, st, connect);
+    else if (st.kind === 'camp') populateCamp(sctx, st, connect);
+    else if (st.kind === 'cottage') populateCottage(sctx, st);
+  }
+
+  // --- Sites the player can discover ---------------------------------------
+  cb.c.sites.unshift(
+    { id: hamlet.id, kind: 'hamlet', name: hamlet.name, x: hamlet.x, z: hamlet.z, radius: 80 },
+    ...(farm ? [{ id: farm.id, kind: 'farmstead' as const, name: farm.name, x: farm.x, z: farm.z, radius: 55 }] : []),
+    ...valeRuins.map((r) => ({ id: r.id, kind: 'watchtower' as const, name: r.name, x: r.x, z: r.z, radius: 22 })),
+    { id: castle.id, kind: 'castle', name: castle.name, x: castle.gate.x, z: castle.gate.z, radius: 70 },
+  );
+
   // --- Pads, clearings, sightline -----------------------------------------
-  const pads: Pad[] = [];
-  for (const b of ctx.buildings) {
-    pads.push({ x: b.x, z: b.z, yaw: b.yaw, halfW: b.width / 2 + 1.4, halfD: b.depth / 2 + 1.4, circle: false, height: b.padHeight, falloff: 7 });
-  }
-  for (const r of ctx.ruins) pads.push({ x: r.x, z: r.z, yaw: 0, halfW: r.radius + 3, halfD: r.radius + 3, circle: true, height: r.padHeight, falloff: 6 });
-  // A gently levelled hollow beneath the ancient tree where the player wakes.
-  {
-    const cxp = (spawn.x + ancientTree.x) / 2;
-    const czp = (spawn.z + ancientTree.z) / 2;
-    pads.push({ x: cxp, z: czp, yaw: 0, halfW: 5, halfD: 5, circle: true, height: finalStageB.heightBeforeBuildings(cxp, czp), falloff: 12 });
-  }
   clearings.push({ x: ancientTree.x, z: ancientTree.z, radius: 15 });
   clearings.push({ x: castle.x, z: castle.z, radius: castle.plateauRadius + 4 });
+  const valeStage = cb.terrain;
+  // A gently levelled hollow beneath the ancient tree where the player wakes.
+  const hx = (spawn.x + ancientTree.x) / 2;
+  const hz = (spawn.z + ancientTree.z) / 2;
+  const extraPads: Pad[] = [
+    { x: hx, z: hz, yaw: 0, halfW: 5, halfD: 5, circle: true, height: valeStage.heightBeforeBuildings(hx, hz), falloff: 12 },
+    ...siteLevelPads(cb).map((p) => ({ x: p.x, z: p.z, yaw: 0, halfW: p.r, halfD: p.r, circle: true, height: cb.heightB(p.x, p.z), falloff: 6 })),
+  ];
+  const content = cb.finalize(extraPads);
+  void finalStageB;
 
   const sightTo = { x: castle.x, z: castle.z };
   const sdx = sightTo.x - spawn.x;
@@ -556,24 +609,45 @@ export function generateWorldPlan(seedInput: string): WorldPlan {
   const sightline = { from: { x: spawn.x, z: spawn.z }, to: { x: spawn.x + (sdx / sl) * 420, z: spawn.z + (sdz / sl) * 420 }, halfWidth: 7, spread: 0.11 };
 
   return {
+    ...content,
     seed,
     generatorVersion: GENERATOR_VERSION,
     regionName: 'The Vale of Unwritten Days',
     spawn,
     ancientTree,
     castle,
-    ruins: ctx.ruins,
-    settlements,
-    buildings: ctx.buildings,
-    roads,
-    fields: ctx.fields,
-    fences,
-    pads,
-    clearings,
     sightline,
-    props,
-    finds,
   };
+}
+
+/** Candidate side sites on the vale's outer hills, well away from the authored core. */
+function valeExtraSites(seed: string, macro: MacroField, cb: ContentBuilder): SiteSeed[] {
+  const rng = new Rng(deriveSeed(seed, 'vale/extras'));
+  const b = VALE_BOUNDS;
+  const out: SiteSeed[] = [];
+  const kinds: SiteSeed['kind'][] = ['watchtower', 'stones', 'shrine', 'camp', 'cottage', 'shrine', 'camp'];
+  const used = new Set<string>([...cb.c.ruins.map((r) => r.name), ...cb.c.settlements.map((st) => st.name)]);
+  const names: Record<string, (r: Rng) => string> = { watchtower: towerName, stones: stonesName, shrine: shrineName, camp: campName, cottage: (r) => `${familyName(r)}\u2019s Cottage` };
+  for (const kind of kinds) {
+    if (!rng.chance(0.75)) continue;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const x = rng.range(b.x0 + 160, b.x1 - 160);
+      const z = rng.range(b.z0 + 160, b.z1 - 160);
+      const near = cb.nearestRoadPoint(x, z);
+      if (near && near.dist < 160) continue;
+      if (Math.hypot(x - cb.c.castles[0]!.x, z - cb.c.castles[0]!.z) < 420) continue;
+      if (cb.c.buildings.some((bd) => Math.hypot(bd.x - x, bd.z - z) < 170)) continue;
+      if (cb.c.fields.some((f) => Math.hypot(f.x - x, f.z - z) < 120)) continue;
+      if (out.some((o) => Math.hypot(o.x - x, o.z - z) < 300)) continue;
+      if (cb.reserves.some((r) => Math.hypot(r.x - x, r.z - z) < r.r + 60)) continue;
+      const e = 10;
+      const slope = Math.hypot(macro.height(x + e, z) - macro.height(x - e, z), macro.height(x, z + e) - macro.height(x, z - e)) / (2 * e);
+      if (slope > (kind === 'cottage' ? 0.18 : 0.26)) continue;
+      out.push({ id: `${seed}/vale/${kind}${out.length}`, kind, name: uniqueName(rng, used, names[kind]!), x, z, reserve: kind === 'cottage' ? 22 : 24, seed: rng.int(0, 2 ** 31) });
+      break;
+    }
+  }
+  return out;
 }
 
 function otherRoadNear(index: RoadIndex, exceptId: string, x: number, z: number, dist: number): boolean {

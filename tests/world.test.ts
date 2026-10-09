@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateWorldPlan, createTerrain, REFERENCE_SEED } from '../src/world/plan';
 import { validateWorld } from '../src/world/validation';
-import { Ecology } from '../src/world/ecology';
+import { Ecology, singleSource } from '../src/world/ecology';
 import { TerrainColorizer } from '../src/world/terrainColor';
 import { buildTerrainGeometry } from '../src/world/terrainStreamer';
 import { CollisionWorld } from '../src/player/collision';
@@ -12,7 +12,7 @@ import { obbSamples } from '../src/world/geometry2d';
 
 const plan = generateWorldPlan(REFERENCE_SEED);
 const terrain = createTerrain(plan);
-const ecology = new Ecology(plan, terrain);
+const ecology = new Ecology(plan.seed, terrain, singleSource(plan));
 
 describe('world plan determinism', () => {
   it('reproduces the same plan for the same seed', () => {
@@ -49,7 +49,7 @@ describe('world plan determinism', () => {
 
 describe('terrain', () => {
   it('is seamless across adjacent terrain nodes (shared border vertices match)', () => {
-    const colorizer = new TerrainColorizer(plan, terrain, ecology);
+    const colorizer = new TerrainColorizer(terrain, ecology);
     const size = 64;
     const n = 16;
     const a = buildTerrainGeometry(terrain, colorizer, 0, -128, size, n);

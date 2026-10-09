@@ -1,18 +1,18 @@
 /**
- * Weapon finds at their planned places in the world. Each find's weapon is
- * generated deterministically from its seed and local luck; taking one swaps
- * it with the weapon in hand, which is left in its place (nothing is lost).
- * State lives for the session; persistent saves arrive with Milestone 4.
+ * Weapon finds and chests at their planned places in the world. Each find's
+ * weapon is generated deterministically from its seed and local luck; taking
+ * one swaps it with the weapon in hand, which is left in its place (nothing is
+ * lost). State lives for the journey; persistent saves arrive with Milestone 4.
  */
 import * as THREE from 'three';
 import { deriveSeed } from '../core/rng';
-import { MeshBuilder } from '../assets/geo';
+import { MeshBuilder, col } from '../assets/geo';
 import { buildWeapon } from '../assets/weaponMesh';
 import { generateWeapon, type WeaponGenome } from './weapons';
 import { RARITY_COLOURS } from './luck';
 import type { MaterialLibrary } from '../rendering/materials';
-import type { Terrain } from '../world/terrain';
-import type { WeaponFind, WorldPlan } from '../world/types';
+import type { TerrainLike } from '../world/terrain';
+import type { PropPlan, WeaponFind } from '../world/types';
 
 export function starterWeapon(seed: string): WeaponGenome {
   return generateWeapon(deriveSeed(seed, 'loot/starter'), { id: `${seed}/weapon/starter`, cls: 'longsword', rarity: 'common', materials: ['steel', 'iron'] });
@@ -29,34 +29,69 @@ interface FindState {
   glint: THREE.Points;
   phase: number;
   anchor: THREE.Vector3;
+  areaId: string;
+  /** Chests: the lid, and how far it has swung open (0..1). */
+  lid?: THREE.Group;
+  lidOpen: number;
 }
 
+/**
+ * Weapon finds in the loaded parts of the world. Areas stream in and out; what
+ * the player has done (swapped a weapon, opened a chest) is remembered for the
+ * journey, so a region looks the same when you come back to it.
+ */
 export class LootSystem {
   readonly group = new THREE.Group();
   private readonly states = new Map<string, FindState>();
+  private readonly areas = new Map<string, { finds: WeaponFind[]; props: PropPlan[] }>();
+  /** Weapons the player left in place of the ones they took. */
+  private readonly swapped = new Map<string, WeaponGenome>();
+  private readonly opened = new Set<string>();
   private readonly glow = new THREE.MeshBasicMaterial({ vertexColors: true });
   private time = 0;
 
   constructor(
-    private readonly plan: WorldPlan,
-    private readonly terrain: Terrain,
+    private readonly terrain: TerrainLike,
     private readonly materials: MaterialLibrary,
   ) {
     this.group.name = 'loot';
-    this.reset();
   }
 
-  /** Restore every find to its generated weapon (new journey). */
+  /** A new journey: every find restored, every chest shut. */
   reset(): void {
-    for (const s of this.states.values()) this.disposeGroup(s.group);
-    this.states.clear();
-    this.group.clear();
-    for (const find of this.plan.finds) {
-      const weapon = findWeapon(find);
-      const st: FindState = { find, weapon, group: new THREE.Group(), glint: this.makeGlint(weapon), phase: (find.seed % 1000) / 159, anchor: new THREE.Vector3() };
+    this.swapped.clear();
+    this.opened.clear();
+    for (const [id, a] of [...this.areas]) {
+      this.removeArea(id);
+      this.addArea(id, a.finds, a.props);
+    }
+  }
+
+  addArea(areaId: string, finds: WeaponFind[], props: PropPlan[]): void {
+    if (this.areas.has(areaId)) return;
+    this.areas.set(areaId, { finds, props });
+    for (const find of finds) {
+      const weapon = this.swapped.get(find.id) ?? findWeapon(find);
+      const st: FindState = { find, weapon, group: new THREE.Group(), glint: this.makeGlint(weapon), phase: (find.seed % 1000) / 159, anchor: new THREE.Vector3(), areaId, lidOpen: this.opened.has(find.id) ? 1 : 0 };
       this.states.set(find.id, st);
-      this.place(st);
+      this.place(st, props);
       this.group.add(st.group, st.glint);
+      if (st.lid) this.group.add(st.lid);
+    }
+  }
+
+  removeArea(areaId: string): void {
+    if (!this.areas.delete(areaId)) return;
+    for (const [id, st] of [...this.states]) {
+      if (st.areaId !== areaId) continue;
+      this.group.remove(st.group, st.glint);
+      if (st.lid) {
+        this.group.remove(st.lid);
+        this.disposeGroup(st.lid);
+      }
+      this.disposeGroup(st.group);
+      st.glint.geometry.dispose();
+      this.states.delete(id);
     }
   }
 
@@ -68,16 +103,34 @@ export class LootSystem {
     return this.states.get(id)?.weapon;
   }
 
+  /** A chest that has not been opened yet. */
+  isClosedChest(id: string): boolean {
+    const st = this.states.get(id);
+    return !!st && st.find.pose === 'chest' && !this.opened.has(id);
+  }
+
+  /** Open a chest: the lid swings up and its weapon is revealed. */
+  open(id: string): WeaponGenome | null {
+    const st = this.states.get(id);
+    if (!st || st.find.pose !== 'chest' || this.opened.has(id)) return null;
+    this.opened.add(id);
+    st.group.visible = true;
+    return st.weapon;
+  }
+
   /** Swap: take the find's weapon, leave `current` in its place. */
   take(id: string, current: WeaponGenome): WeaponGenome {
     const st = this.states.get(id)!;
     const taken = st.weapon;
     st.weapon = current;
+    this.swapped.set(id, current);
     this.group.remove(st.group, st.glint);
     this.disposeGroup(st.group);
+    st.glint.geometry.dispose();
     st.group = new THREE.Group();
     st.glint = this.makeGlint(current);
-    this.place(st);
+    const area = this.areas.get(st.areaId);
+    this.place(st, area?.props ?? [], false);
     this.group.add(st.group, st.glint);
     return taken;
   }
@@ -91,7 +144,7 @@ export class LootSystem {
     return p;
   }
 
-  private place(st: FindState): void {
+  private place(st: FindState, props: PropPlan[], makeLid = true): void {
     const { find, weapon } = st;
     const b = new MeshBuilder();
     buildWeapon(b, weapon);
@@ -108,14 +161,35 @@ export class LootSystem {
     const g = st.group;
     g.rotation.order = 'YXZ';
     g.rotation.y = find.yaw;
-    if (find.pose === 'lying') {
+    if (find.pose === 'chest') {
+      // Lying across the open chest; hidden until the lid is lifted.
+      g.rotation.y = find.yaw + Math.PI / 2;
+      g.rotation.x = -Math.PI / 2;
+      g.rotation.z = 0.1;
+      g.position.set(find.x, ground + 0.5, find.z);
+      st.anchor.set(find.x, ground + 0.7, find.z);
+      g.visible = this.opened.has(find.id);
+      if (makeLid && !st.lid) {
+        const lb = new MeshBuilder();
+        lb.box('planks', new THREE.Matrix4(), 0, 0.06, 0.3, 0.94, 0.12, 0.62, { color: col('#a87c50') });
+        for (const sx of [-0.3, 0.3]) lb.box('metal', new THREE.Matrix4(), sx, 0.07, 0.3, 0.07, 0.14, 0.64, { color: col('#3a3430') });
+        const lid = new THREE.Group();
+        for (const [key, geo] of lb.build()) lid.add(new THREE.Mesh(geo, this.materials.get(key as 'planks' | 'metal')));
+        // Hinged along the chest's back edge (local −Z).
+        const back = new THREE.Vector3(0, 0, -0.3).applyAxisAngle(new THREE.Vector3(0, 1, 0), find.yaw);
+        lid.position.set(find.x + back.x, ground + 0.46, find.z + back.z);
+        lid.rotation.order = 'YXZ';
+        lid.rotation.y = find.yaw;
+        st.lid = lid;
+      }
+    } else if (find.pose === 'lying') {
       g.rotation.x = -Math.PI / 2;
       g.rotation.z = 0.15;
       g.position.set(find.x, ground + 0.04, find.z);
       st.anchor.set(find.x, ground + 0.35, find.z);
     } else if (find.pose === 'stuck') {
       // Point (or head) down, a third of it in the ground or block.
-      const blockTop = this.plan.props.some((p) => p.kind === 'chopping-block' && Math.hypot(p.x - find.x, p.z - find.z) < 0.5) ? 0.5 : 0;
+      const blockTop = props.some((p) => p.kind === 'chopping-block' && Math.hypot(p.x - find.x, p.z - find.z) < 0.5) ? 0.5 : 0;
       g.rotation.x = Math.PI + 0.12;
       g.rotation.z = 0.08;
       const above = hafted ? weapon.shape.gripLength - 0.04 : len * 0.68 + 0.03;
@@ -134,6 +208,16 @@ export class LootSystem {
   update(dt: number, cam: THREE.Vector3): void {
     this.time += dt;
     for (const st of this.states.values()) {
+      const closed = st.find.pose === 'chest' && !this.opened.has(st.find.id);
+      if (st.lid) {
+        const target = closed ? 0 : 1;
+        st.lidOpen += (target - st.lidOpen) * Math.min(1, dt * 4);
+        st.lid.rotation.x = -1.95 * st.lidOpen;
+      }
+      if (closed) {
+        st.glint.visible = false;
+        continue;
+      }
       const d = st.anchor.distanceTo(cam);
       // A brief twinkle every few seconds, visible within ~45 m; rarer finds twinkle more.
       const tw = Math.sin(this.time * (1.3 + (st.weapon.rarity === 'common' ? 0 : 0.6)) + st.phase * 6.283);
