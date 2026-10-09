@@ -235,12 +235,21 @@ world-space function.
   1.7 km.
 - **Landmarks:** castles within 5.2 km are built from skeletons as soon as they could be seen.
 
-## Persistence (current state)
+## Persistence (`gameplay/save.ts`)
 
-There is **no save system** yet. Static content rebuilds identically from the seed, which unit
-tests verify. Planned save format (Milestone 4): IndexedDB, versioned, storing diffs keyed by
-stable ids such as `{seed}/{settlementId}/b{index}` and `{seed}/prop/...`. Whole scenes will
-never be serialised.
+- **The slot:** a single journey save in `localStorage` (`hollow-atlas/journey/v1`), written
+  automatically.
+- **Contents:** it stores only what the journey changed, keyed by stable ids:
+  - player position and view;
+  - the weapon in hand, as a recipe (`starter`, or a find's seed, luck and class);
+  - what lies at each swapped find;
+  - opened chests and open doors;
+  - discovered and rumoured places, explored fog-of-war cells, distance travelled;
+  - which place each villager has told you of.
+- **Validity:** a save carries the generator version; a save from another version is ignored,
+  since it would describe a different world.
+- Static content rebuilds identically from the seed (unit-tested). Whole scenes are never
+  serialised.
 
 ## Validation (`validation.ts`)
 

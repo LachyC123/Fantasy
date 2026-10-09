@@ -7,10 +7,10 @@ metres (press F3 to see your position).
 
 | # | Limitation | Planned |
 | --- | --- | --- |
-| L1 | No save/load. Continue and Load Journey are deliberately absent from the title menu, so there are no fake buttons. | M4 (IndexedDB) |
+| L1 | One save slot (the last journey), in `localStorage`. It is autosaved; there are no manual saves or multiple slots. | Later |
 | L2 | Only inns are enterable. Other doors are closed and have no prompt; churches are closed; castle gates are shut (portcullis). | Later |
 | L3 | Villagers exist, but there are no schedules, trade or animals, and no enemies; generated creatures can only be viewed in the developer gallery. Swings have no hit detection, and weapon stats are not used yet. | M5, M7 |
-| L4 | The Atlas is a map only (no story entries, notes or rumours); no inventory or quests. Taken weapons, opened chests, explored ground and discoveries last for the journey only (no saves). | M4 |
+| L4 | The Atlas is a map with rumours; no story entries, notes or journal; no inventory beyond the weapon in hand; no quests. | M4 |
 | L5 | No water (rivers or lakes) yet. | M3 |
 | L6 | ~~No sites beyond the vale.~~ The open world is procedural and endless. Remaining: distinct biomes (fen, marches, …) and water. | M3 |
 | L7 | All audio is synthesised placeholder sound. | Later audio pass |

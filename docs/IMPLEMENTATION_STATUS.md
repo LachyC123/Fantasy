@@ -3,7 +3,7 @@
 What actually works today, what is a prototype and what is only planned. Every number below
 comes from a run in the development container. Nothing here is estimated or invented.
 
-**Build:** 0.5.0 (Milestone 1, the procedural arsenal and bestiary, touch play on phones, the open procedural world, and living villages with enterable inns).
+**Build:** 0.6.0 (Milestone 1, the procedural arsenal and bestiary, touch play on phones, the open procedural world, living villages with enterable inns, and journey saves).
 **Reference seed:** `reference-valley`.
 **Generator version:** 1.
 
@@ -46,7 +46,7 @@ comes from a run in the development container. Nothing here is estimated or inve
 | Combat (hit detection, block, dodge, enemies in the world) | **planned** | M5 |
 | Dungeons, caves, crypts | **planned** | M6 |
 | Rivers and lakes; distinct biomes | **planned** | M3 |
-| Save and load | **planned** | M4 |
+| Journey saves (autosave, Continue Journey) | **implemented** | one slot, `localStorage`; browser-tested reload and continue |
 
 ## Test results (latest runs)
 
@@ -142,7 +142,7 @@ lasts 5 seconds of game time; at software-rendering frame rates it outlasts the 
 | 14. Cobbled street towards enormous Gothic towers (reference A) | ⚠️ **partial**: the hamlet street is cobbled and frames the spires (`03-hamlet-street-castle.png`); the dense town street is M2 |
 | 15. Side ruin, cave or crypt with rooms and a secret | ⏳ pending (M6) |
 | 16. Reward, puzzle or quest, Atlas update | ⚠️ **partial**: rewards (finds, chests) and Atlas updates on discovery; puzzles and quests are M4/M9 |
-| 17. Save, reload, persistence | ⏳ pending (M4) |
+| 17. Save, reload, persistence | ✅ autosave and Continue Journey restore position, weapon (inventory), swapped finds, opened chests, open doors, discoveries, rumours and explored map; villagers are the same people (deterministic). There are no quests yet to persist |
 | 18. Further procedural terrain with continuity | ✅ endless regions with continuous terrain and roads (tested across borders) and new places to discover; distinct biomes and water are still to come (M3) |
 
 The full vertical slice is therefore **not complete**. Milestone 1 is complete; the open world

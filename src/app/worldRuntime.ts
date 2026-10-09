@@ -381,6 +381,19 @@ export class WorldRuntime {
     return out;
   }
 
+  /** Doors and tales for saving. */
+  snapshot(): { openDoors: string[]; told: Record<string, SitePlan> } {
+    return { openDoors: [...this.openDoors], told: Object.fromEntries(this.told) };
+  }
+
+  restore(s: { openDoors: string[]; told: Record<string, SitePlan> }): void {
+    this.openDoors.clear();
+    for (const id of s.openDoors) this.openDoors.add(id);
+    for (const d of this.doors) if (d.open !== this.openDoors.has(d.id)) d.toggle();
+    this.told.clear();
+    for (const [k, v] of Object.entries(s.told)) this.told.set(k, v);
+  }
+
   /** Hinged doors in the loaded areas. */
   get doors(): Door[] {
     return [...this.loaded.values()].flatMap((a) => a.doors);

@@ -36,7 +36,8 @@ npm run build        # typecheck + production build into dist/
 npm run preview      # serve the production build at http://localhost:4173
 ```
 
-Open the URL, choose **New Journey**, keep or change the seed, then press **Begin**. After the intro,
+Open the URL, choose **New Journey**, keep or change the seed, then press **Begin**. Journeys are
+saved automatically; **Continue Journey** on the title screen picks up where you left off. After the intro,
 click **Click to explore** to capture the mouse.
 
 ### Playing on a phone or tablet

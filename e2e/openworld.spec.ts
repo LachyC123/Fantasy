@@ -103,3 +103,41 @@ test('village life: a villager tells of a real place, the Atlas marks it, the in
   expect(errors).toEqual([]);
   expect(await api<string[]>(page, 'errorList')).toEqual([]);
 });
+
+test('journeys are saved: reload the page and continue where you were, with what you changed', async ({ page }) => {
+  const errors = await openGame(page);
+  await beginJourney(page);
+  // Change the journey: walk somewhere, take the waystone's weapon, hear a rumour.
+  const find = await page.evaluate(() => (window as any).__hollowAtlas.finds().find((f: { id: string }) => f.id.endsWith('/find/waystone')));
+  await page.evaluate((f) => {
+    const h = (window as any).__hollowAtlas;
+    const [ax, ay, az] = f.anchor;
+    h.teleport(ax + 1.8, az + 0.3);
+    const p = h.player();
+    h.look(Math.atan2(-(ax - p.x), -(az - p.z)), Math.atan2(ay - (p.y + 1.62), Math.hypot(ax - p.x, az - p.z)));
+  }, find);
+  await expect(page.locator('#hud .prompt')).toContainText('Take', { timeout: 30_000 });
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction((id) => (window as any).__hollowAtlas.weapon().id === id, find.id, { timeout: 30_000 });
+  const taken = await api<{ id: string; name: string }>(page, 'weapon');
+  const before = await api<{ x: number; z: number }>(page, 'player');
+  await api(page, 'saveNow');
+  const saved = await api<{ seed: string; weapon: { kind: string } }>(page, 'savedJourney');
+  expect(saved.seed).toBe('reference-valley');
+  expect(saved.weapon.kind).toBe('find');
+
+  // Close and reopen: the title offers to continue.
+  await page.goto('/?autotest');
+  await expect(page.locator('[data-action="continue"]')).toBeVisible();
+  await expect(page.locator('#title-save')).toContainText('reference-valley');
+  await page.waitForFunction(() => (window as any).__hollowAtlas?.ready(), null, { timeout: 240_000 });
+  await page.click('[data-action="continue"]');
+  await page.waitForFunction(() => (window as any).__hollowAtlas.state() === 'playing', null, { timeout: 240_000 });
+  const after = await api<{ x: number; z: number }>(page, 'player');
+  expect(Math.hypot(after.x - before.x, after.z - before.z)).toBeLessThan(0.5);
+  expect((await api<{ id: string }>(page, 'weapon')).id).toBe(find.id);
+  // The starting blade now lies where the find was.
+  const left = await page.evaluate((id) => (window as any).__hollowAtlas.finds().find((f: { id: string }) => f.id === id), find.id);
+  expect(left.name).not.toBe(taken.name);
+  expect(errors).toEqual([]);
+});

@@ -27,6 +27,8 @@ import { Atlas } from '../ui/atlas';
 import { Compass, type CompassMark } from '../ui/compass';
 import { Exploration } from '../gameplay/exploration';
 import { cellOf, REGION } from '../world/regions';
+import { readSave, writeSave, type JourneySave } from '../gameplay/save';
+import { weaponFromRef, weaponRef } from '../gameplay/loot';
 import { isTouchDevice } from './device';
 import { TouchControls } from './touch';
 import { VIEW_DISTANCES } from './settings';
@@ -56,6 +58,9 @@ export class Game {
   /** Fog of war and discovered places for this journey. */
   exploration = new Exploration();
   private atlasReturn: 'playing' | 'paused' = 'playing';
+  private saveTimer = 20;
+  /** The save found at start-up (offered as Continue Journey). */
+  private pendingSave: JourneySave | null = null;
   private compassTimer = 0;
   private compassMarks: CompassMark[] = [];
   /** On-screen controls on phones and tablets (null with a mouse and keyboard). */
@@ -161,7 +166,12 @@ export class Game {
     window.addEventListener('blur', () => {
       if (this.state === 'playing' && !this.opts.autotest) this.pause();
     });
-    document.addEventListener('visibilitychange', () => (document.hidden ? this.audio.suspend() : this.audio.resume()));
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this.audio.suspend();
+        this.saveJourney();
+      } else this.audio.resume();
+    });
     this.resize();
   }
 
@@ -169,9 +179,12 @@ export class Game {
 
   start(): void {
     this.ui.show('title');
-    // Every journey starts in a new world unless a seed is asked for.
-    const seed = this.opts.seed ?? randomSeedName();
-    this.ui.seedInput.value = seed;
+    // A journey in progress can be continued; otherwise every journey starts in a new world.
+    this.pendingSave = this.opts.seed ? null : readSave();
+    if (this.pendingSave) this.ui.showContinue(this.pendingSave);
+    const seed = this.opts.seed ?? this.pendingSave?.seed ?? randomSeedName();
+    // With a journey to continue, New Journey still suggests a fresh world.
+    this.ui.seedInput.value = this.pendingSave ? randomSeedName() : seed;
     this.state = 'title';
     this.ui.setTitleStatus('Preparing the vale…', false);
     // Build the world behind the title as a living backdrop.
@@ -238,12 +251,91 @@ export class Game {
     this.player!.teleport(w.plan.spawn.x, w.plan.spawn.z);
     this.yaw = w.plan.spawn.yaw;
     this.pitch = -0.28;
+    w.restore({ openDoors: [], told: {} });
     this.guidance = new Guidance(this.ui, () => w.sites, (x, z) => w.regionNameAt(x, z), w.plan.castle.id, this.touch !== null);
     this.exploration = new Exploration();
-    this.guidance.onDiscover = (s) => this.exploration.discover(s);
+    this.guidance.onDiscover = (s) => {
+      this.exploration.discover(s);
+      this.saveJourney();
+    };
     this.ui.setProgress(1, 'Ready');
     this.history.replaceState(seed);
+    this.saveJourney(true);
     this.startIntro();
+  }
+
+  /** Continue the saved journey: rebuild its world from the seed, then put back what the journey changed. */
+  private async continueJourney(): Promise<void> {
+    const save = this.pendingSave ?? readSave();
+    if (!save) return;
+    this.audio.start();
+    this.audio.setVolume(this.settings.volume);
+    this.state = 'loading';
+    this.ui.show('loading');
+    this.ui.setProgress(0, 'Charting the vale');
+    try {
+      if (this.building) await this.building;
+      if (this.world?.seed !== save.seed) {
+        this.building = this.loadWorld(save.seed, (stage, f) => this.ui.setProgress(f, stage));
+        await this.building;
+      }
+    } catch (e) {
+      this.fail(e);
+      return;
+    }
+    const w = this.world!;
+    w.loot.restore({ swapped: save.swapped, opened: save.opened }, w.seed, w.loadedAreas.flatMap((a) => a.finds));
+    w.restore({ openDoors: save.openDoors, told: save.told });
+    this.exploration = Exploration.restore(save);
+    this.guidance = new Guidance(this.ui, () => w.sites, (x, z) => w.regionNameAt(x, z), w.plan.castle.id, this.touch !== null);
+    for (const s of save.discovered) this.guidance.seen.add(s.id);
+    this.guidance.skipHints();
+    this.guidance.onDiscover = (s) => {
+      this.exploration.discover(s);
+      this.saveJourney();
+    };
+    this.equip(weaponFromRef(save.weapon, w.seed));
+    this.player!.teleport(save.player.x, save.player.z, save.player.y);
+    this.yaw = save.player.yaw;
+    this.pitch = save.player.pitch;
+    this.history.replaceState(w.seed);
+    // Let the land around the saved spot stream in before handing over control.
+    this.ui.setProgress(0.6, 'Finding your way back');
+    const t0 = performance.now();
+    while (performance.now() - t0 < 30_000) {
+      if (w.terrainStreamer.stats.queued === 0 && w.vegetation.stats.pending === 0 && w.streamStats.regionsLoaded > 0) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    this.ui.setProgress(1, 'Ready');
+    this.pipeline.fade = 1;
+    this.ui.hideIntro();
+    if (this.opts.autotest || this.touch) this.enterPlay();
+    else this.enterCapture();
+    this.ui.banner('Journey resumed', w.regionNameAt(save.player.x, save.player.z), 5);
+  }
+
+  /** Write the journey to the save slot (cheap; called often). */
+  private saveJourney(force = false): void {
+    const w = this.world;
+    const p = this.player;
+    if (!w || !p || !this.weapon) return;
+    if (!force && this.state !== 'playing' && this.state !== 'paused' && this.state !== 'atlas') return;
+    const loot = w.loot.snapshot();
+    const ws = w.snapshot();
+    const ex = this.exploration.snapshot();
+    writeSave({
+      format: 1,
+      generatorVersion: w.plan.generatorVersion,
+      seed: w.seed,
+      savedAt: new Date().toISOString(),
+      player: { x: p.x, y: p.y, z: p.z, yaw: this.yaw, pitch: this.pitch },
+      weapon: weaponRef(this.weapon, w.loot.known),
+      swapped: loot.swapped,
+      opened: loot.opened,
+      openDoors: ws.openDoors,
+      told: ws.told,
+      ...ex,
+    });
   }
 
   private readonly history = {
@@ -297,6 +389,7 @@ export class Game {
 
   private pause(): void {
     if (this.state !== 'playing') return;
+    this.saveJourney();
     this.state = 'paused';
     this.input.enabled = false;
     this.input.releaseLock();
@@ -340,6 +433,9 @@ export class Game {
   private onAction(a: string): void {
     this.audio.click();
     switch (a) {
+      case 'continue':
+        void this.continueJourney();
+        break;
       case 'new-journey':
         this.ui.push('new-journey');
         break;
@@ -742,6 +838,11 @@ export class Game {
       g.state.swung = true;
     }
     g.update(dt, p.x, p.z);
+    this.saveTimer -= dt;
+    if (this.saveTimer <= 0) {
+      this.saveTimer = 20;
+      this.saveJourney();
+    }
     this.updateInterior(dt, p.x, p.y, p.z);
     this.exploration.visit(p.x, p.z);
     this.updateCompass(dt);
@@ -999,6 +1100,8 @@ export class Game {
         return best;
       },
       regionPlan: (rx: number, rz: number) => this.world?.index.region(rx, rz),
+      saveNow: () => this.saveJourney(true),
+      savedJourney: () => readSave(),
       villagers: () => this.world?.villagers.all.map((v) => ({ id: v.plan.id, name: v.plan.name, trade: v.plan.trade, pos: [v.x, v.y, v.z], head: v.headPosition.toArray() })) ?? [],
       rumoured: () => this.exploration.rumoured.map((r) => ({ ...r })),
       doors: () => this.world?.doors.map((d) => ({ id: d.id, open: d.open, center: d.center.toArray(), yaw: d.doorway.yaw })) ?? [],

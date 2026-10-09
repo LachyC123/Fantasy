@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.0: Journeys are saved
+
+**Added**
+- **Autosave** to a single slot in `localStorage`: every 20 s while playing, on pause, when the tab
+  is hidden, on every discovery, and at the start of a new journey.
+- **Continue Journey** on the title screen, shown only when a save exists, with the seed, the
+  number of places found and the date.
+- **What is restored:**
+  - position and view;
+  - the weapon in hand, and what was left at each find;
+  - opened chests and open doors;
+  - discovered and rumoured places, explored ground and distance travelled;
+  - what each villager has told you.
+- **What is not saved:** the world itself. It rebuilds identically from the seed, so a save only
+  holds what the journey changed, with weapons stored as recipes. A save from a different
+  generator version is ignored.
+- New Journey suggests a fresh random world even when a journey can be continued.
+- A browser test: change a journey, save, reload the page, continue, and find the position, the
+  weapon in hand and the swapped find all restored.
+
 ## 0.5.0: Villages come alive (Milestone 2 progress)
 
 **Added**

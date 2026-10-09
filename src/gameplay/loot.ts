@@ -13,6 +13,7 @@ import { RARITY_COLOURS } from './luck';
 import type { MaterialLibrary } from '../rendering/materials';
 import type { TerrainLike } from '../world/terrain';
 import type { PropPlan, WeaponFind } from '../world/types';
+import type { WeaponRef } from './save';
 
 export function starterWeapon(seed: string): WeaponGenome {
   return generateWeapon(deriveSeed(seed, 'loot/starter'), { id: `${seed}/weapon/starter`, cls: 'longsword', rarity: 'common', materials: ['steel', 'iron'] });
@@ -20,6 +21,16 @@ export function starterWeapon(seed: string): WeaponGenome {
 
 export function findWeapon(find: WeaponFind): WeaponGenome {
   return generateWeapon(find.seed, { id: find.id, luck: find.luck, cls: find.cls });
+}
+
+/** The recipe of a weapon (for saves): every weapon in a journey is the starter or a find's roll. */
+export function weaponRef(w: WeaponGenome, finds: Map<string, WeaponFind>): WeaponRef {
+  const f = finds.get(w.id);
+  return f ? { kind: 'find', id: f.id, seed: f.seed, luck: f.luck, cls: f.cls } : { kind: 'starter' };
+}
+
+export function weaponFromRef(ref: WeaponRef, journeySeed: string): WeaponGenome {
+  return ref.kind === 'starter' ? starterWeapon(journeySeed) : generateWeapon(ref.seed, { id: ref.id, luck: ref.luck, cls: ref.cls });
 }
 
 interface FindState {
@@ -47,6 +58,8 @@ export class LootSystem {
   /** Weapons the player left in place of the ones they took. */
   private readonly swapped = new Map<string, WeaponGenome>();
   private readonly opened = new Set<string>();
+  /** Every find seen this journey (so a weapon's recipe is known after its region unloads). */
+  readonly known = new Map<string, WeaponFind>();
   private readonly glow = new THREE.MeshBasicMaterial({ vertexColors: true });
   private time = 0;
 
@@ -71,6 +84,7 @@ export class LootSystem {
     if (this.areas.has(areaId)) return;
     this.areas.set(areaId, { finds, props });
     for (const find of finds) {
+      this.known.set(find.id, find);
       const weapon = this.swapped.get(find.id) ?? findWeapon(find);
       const st: FindState = { find, weapon, group: new THREE.Group(), glint: this.makeGlint(weapon), phase: (find.seed % 1000) / 159, anchor: new THREE.Vector3(), areaId, lidOpen: this.opened.has(find.id) ? 1 : 0 };
       this.states.set(find.id, st);
@@ -101,6 +115,29 @@ export class LootSystem {
 
   weaponAt(id: string): WeaponGenome | undefined {
     return this.states.get(id)?.weapon;
+  }
+
+  /** What a journey has changed, for saving. */
+  snapshot(): { swapped: Record<string, WeaponRef>; opened: string[] } {
+    const swapped: Record<string, WeaponRef> = {};
+    for (const [id, w] of this.swapped) swapped[id] = weaponRef(w, this.known);
+    return { swapped, opened: [...this.opened] };
+  }
+
+  /** Restore a saved journey's changes (areas already loaded are rebuilt). */
+  restore(s: { swapped: Record<string, WeaponRef>; opened: string[] }, journeySeed: string, finds: WeaponFind[]): void {
+    for (const f of finds) this.known.set(f.id, f);
+    this.swapped.clear();
+    this.opened.clear();
+    for (const [id, ref] of Object.entries(s.swapped)) {
+      if (ref.kind === 'find') this.known.set(ref.id, { id: ref.id, x: 0, z: 0, yaw: 0, pose: 'lying', seed: ref.seed, luck: ref.luck, cls: ref.cls, story: '' });
+      this.swapped.set(id, weaponFromRef(ref, journeySeed));
+    }
+    for (const id of s.opened) this.opened.add(id);
+    for (const [id, a] of [...this.areas]) {
+      this.removeArea(id);
+      this.addArea(id, a.finds, a.props);
+    }
   }
 
   /** A chest that has not been opened yet. */

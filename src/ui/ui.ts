@@ -89,6 +89,16 @@ export class UI {
     el?.focus({ preventScroll: true });
   }
 
+  /** Offer the saved journey on the title screen. */
+  showContinue(save: { seed: string; discovered: unknown[]; savedAt: string }): void {
+    $<HTMLButtonElement>('[data-action="continue"]').hidden = false;
+    const note = $('#title-save');
+    note.hidden = false;
+    const when = new Date(save.savedAt);
+    const n = save.discovered.length;
+    note.textContent = `“${save.seed}” · ${n} ${n === 1 ? 'place' : 'places'} found · ${isNaN(when.getTime()) ? '' : when.toLocaleDateString()}`;
+  }
+
   setTitleStatus(text: string, ready: boolean): void {
     $('#title-status').textContent = text;
     $<HTMLButtonElement>('[data-action="new-journey"]').disabled = false;

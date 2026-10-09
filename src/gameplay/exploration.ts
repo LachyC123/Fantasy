@@ -61,6 +61,19 @@ export class Exploration {
     return this.discovered.some((s) => s.id === id);
   }
 
+  snapshot(): { discovered: SitePlan[]; rumoured: SitePlan[]; explored: number[]; travelled: number } {
+    return { discovered: this.discovered.slice(), rumoured: this.rumoured.slice(), explored: [...this.cells], travelled: this.travelled };
+  }
+
+  static restore(s: { discovered: SitePlan[]; rumoured: SitePlan[]; explored: number[]; travelled: number }): Exploration {
+    const e = new Exploration();
+    for (const c of s.explored) e.cells.add(c);
+    e.discovered.push(...s.discovered);
+    e.rumoured.push(...s.rumoured);
+    e.travelled = s.travelled;
+    return e;
+  }
+
   get exploredArea(): number {
     return this.cells.size * CELL * CELL;
   }
